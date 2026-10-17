@@ -1,0 +1,125 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { dashboardCounts } from '../../lib/server/dashboard.ts';
+import { enquiryGates } from '../../lib/server/settings.ts';
+import { recentAudit } from '../../lib/server/audit.ts';
+
+const counts = dashboardCounts();
+const gates = enquiryGates();
+const audit = recentAudit(10);
+const n = (o: Record<string, number>, k: string) => o[k] ?? 0;
+const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+---
+
+<AdminLayout title="Dashboard">
+  <div class="dash-grid">
+    <section class="admin-card" aria-labelledby="d-enq">
+      <h2 id="d-enq">Enquiries</h2>
+      <dl class="dash-stats">
+        <div><dt>New</dt><dd class="mono">{n(counts.enquiriesByStatus, 'new')}</dd></div>
+        <div><dt>In progress</dt><dd class="mono">{n(counts.enquiriesByStatus, 'in_progress')}</dd></div>
+        <div><dt>Resolved</dt><dd class="mono">{n(counts.enquiriesByStatus, 'resolved')}</dd></div>
+      </dl>
+      <p class="dash-gate">
+        Public submissions:
+        {
+          gates.open ? (
+            <span class="admin-badge admin-badge--on">Accepting</span>
+          ) : (
+            <span class="admin-badge admin-badge--off">Off</span>
+          )
+        }
+      </p>
+      <a href="/admin/enquiries" class="admin-btn admin-btn--secondary">Open inbox</a>
+    </section>
+
+    <section class="admin-card" aria-labelledby="d-areas">
+      <h2 id="d-areas">Service areas</h2>
+      <dl class="dash-stats">
+        <div><dt>Published</dt><dd class="mono">{counts.locationsPublished}</dd></div>
+        <div><dt>Available</dt><dd class="mono">{n(counts.locationsByStatus, 'available')}</dd></div>
+        <div><dt>Limited</dt><dd class="mono">{n(counts.locationsByStatus, 'limited')}</dd></div>
+        <div><dt>Planned</dt><dd class="mono">{n(counts.locationsByStatus, 'planned')}</dd></div>
+        <div><dt>Unconfirmed</dt><dd class="mono">{n(counts.locationsByStatus, 'unconfirmed')}</dd></div>
+      </dl>
+      <a href="/admin/service-areas" class="admin-btn admin-btn--secondary">Manage service areas</a>
+    </section>
+  </div>
+
+  <section class="admin-card" aria-labelledby="d-audit">
+    <h2 id="d-audit">Recent activity</h2>
+    {
+      audit.length === 0 ? (
+        <p class="admin-empty">No activity recorded yet.</p>
+      ) : (
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th scope="col">When</th>
+                <th scope="col">Action</th>
+                <th scope="col">By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {audit.map((a) => (
+                <tr>
+                  <td>{fmt(a.at)}</td>
+                  <td class="mono">{a.action}</td>
+                  <td>{a.username ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+  </section>
+</AdminLayout>
+
+<style>
+  .dash-grid {
+    display: grid;
+    gap: var(--space-3);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+    margin-bottom: var(--space-3);
+  }
+
+  .dash-grid .admin-card + .admin-card {
+    margin-top: 0;
+  }
+
+  .dash-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: var(--space-1-5);
+    margin-bottom: var(--space-2);
+  }
+
+  .dash-stats div {
+    display: flex;
+    flex-direction: column-reverse;
+    padding: var(--space-1-5);
+    border-radius: var(--radius-md);
+    background: var(--ice-100);
+  }
+
+  .dash-stats dt {
+    font-size: var(--fs-xs);
+    color: var(--text-secondary);
+  }
+
+  .dash-stats dd {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--brand-solar);
+  }
+
+  .dash-gate {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+    font-size: var(--fs-sm);
+  }
+</style>

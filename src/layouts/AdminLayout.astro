@@ -1,0 +1,560 @@
+---
+import '../styles/fonts.css';
+import '../styles/global.css';
+import Icon from '../components/Icon.astro';
+import Csrf from '../components/admin/Csrf.astro';
+import type { IconName } from '../components/icons';
+
+interface Props {
+  title: string;
+  /** Breadcrumb trail after "Admin". */
+  crumbs?: { label: string; href?: string }[];
+  /** Flash message shown at the top of the workspace. */
+  flash?: { kind: 'success' | 'error' | 'info'; text: string } | null;
+}
+
+const { title, crumbs = [], flash = null } = Astro.props;
+const user = Astro.locals.admin?.user;
+const path = Astro.url.pathname.replace(/\/$/, '') || '/admin';
+
+const nav: { label: string; href: string; icon: IconName }[] = [
+  { label: 'Dashboard', href: '/admin', icon: 'gauge' },
+  { label: 'Service Areas', href: '/admin/service-areas', icon: 'mapPin' },
+  { label: 'Enquiries', href: '/admin/enquiries', icon: 'mail' },
+];
+const isActive = (href: string) => (href === '/admin' ? path === '/admin' : path === href || path.startsWith(`${href}/`));
+---
+
+<!doctype html>
+<html lang="en-IN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} · VK Solar Admin</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body class="admin">
+    <a class="skip-link" href="#admin-main">Skip to main content</a>
+    <div class="admin-shell">
+      <aside class="admin-sidebar on-dark" aria-label="Admin">
+        <div class="admin-sidebar__brand">
+          <span class="admin-sidebar__name">VK Solar</span>
+          <span class="admin-sidebar__sub">Admin</span>
+        </div>
+        <nav aria-label="Admin sections">
+          <ul role="list">
+            {
+              nav.map((item) => (
+                <li>
+                  <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
+                    <Icon name={item.icon} size={20} />
+                    {item.label}
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+        <div class="admin-sidebar__foot">
+          <a href="/" target="_blank" rel="noopener noreferrer">
+            <Icon name="arrowRight" size={18} /> View website<span class="sr-only"> (opens in a new tab)</span>
+          </a>
+          {
+            user && (
+              <form method="post" action="/admin/logout">
+                <Csrf />
+                <button type="submit">
+                  <Icon name="close" size={18} /> Log out <span class="admin-sidebar__user">({user.username})</span>
+                </button>
+              </form>
+            )
+          }
+        </div>
+      </aside>
+
+      <main id="admin-main" class="admin-main" tabindex="-1">
+        <nav aria-label="Breadcrumb" class="admin-crumbs">
+          <ol role="list">
+            <li><a href="/admin">Admin</a></li>
+            {
+              crumbs.map((c) => (
+                <li>{c.href ? <a href={c.href}>{c.label}</a> : <span aria-current="page">{c.label}</span>}</li>
+              ))
+            }
+          </ol>
+        </nav>
+        <h1 class="admin-title">{title}</h1>
+        {
+          flash && (
+            <div class:list={['admin-flash', `admin-flash--${flash.kind}`]} role={flash.kind === 'error' ? 'alert' : 'status'}>
+              <Icon name={flash.kind === 'error' ? 'alert' : flash.kind === 'success' ? 'checkCircle' : 'info'} size={20} />
+              <p>{flash.text}</p>
+            </div>
+          )
+        }
+        <slot />
+      </main>
+    </div>
+
+    <dialog class="admin-confirm" data-confirm-dialog aria-labelledby="confirm-title">
+      <form method="dialog">
+        <h2 id="confirm-title">Please confirm</h2>
+        <p data-confirm-text></p>
+        <div class="admin-confirm__actions">
+          <button value="cancel" class="admin-btn admin-btn--secondary">Cancel</button>
+          <button value="ok" class="admin-btn admin-btn--danger" data-confirm-ok>Confirm</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script>
+      // Forms with data-confirm="message" ask for confirmation in an accessible dialog first.
+      const dialog = document.querySelector<HTMLDialogElement>('[data-confirm-dialog]');
+      const text = dialog?.querySelector<HTMLElement>('[data-confirm-text]');
+      document.querySelectorAll<HTMLFormElement>('form[data-confirm]').forEach((form) => {
+        form.addEventListener('submit', (event) => {
+          if (!dialog || !text || form.dataset.confirmed === 'yes') return;
+          event.preventDefault();
+          text.textContent = form.dataset.confirm ?? 'Are you sure?';
+          dialog.returnValue = '';
+          dialog.showModal();
+          dialog.addEventListener(
+            'close',
+            () => {
+              if (dialog.returnValue === 'ok') {
+                form.dataset.confirmed = 'yes';
+                form.requestSubmit(event.submitter as HTMLElement | null);
+              }
+            },
+            { once: true },
+          );
+        });
+      });
+
+      // Warn before leaving a form with unsaved changes.
+      document.querySelectorAll<HTMLFormElement>('form[data-unsaved-warning]').forEach((form) => {
+        let dirty = false;
+        form.addEventListener('input', () => (dirty = true));
+        form.addEventListener('submit', () => (dirty = false));
+        window.addEventListener('beforeunload', (e) => {
+          if (dirty) e.preventDefault();
+        });
+      });
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  body.admin {
+    background: var(--admin-workspace-bg);
+  }
+
+  .admin-shell {
+    display: grid;
+    min-height: 100dvh;
+  }
+
+  .admin-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-2);
+    background: var(--admin-sidebar-bg);
+    color: var(--admin-sidebar-text);
+  }
+
+  .admin-sidebar__brand {
+    display: grid;
+    padding-inline: var(--space-1);
+  }
+
+  .admin-sidebar__name {
+    font-family: var(--font-heading);
+    font-weight: var(--fw-bold);
+    font-size: 1.25rem;
+    color: var(--white);
+  }
+
+  .admin-sidebar__sub {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--tracking-eyebrow);
+    text-transform: uppercase;
+  }
+
+  .admin-sidebar ul {
+    display: grid;
+    gap: 2px;
+  }
+
+  .admin-sidebar a,
+  .admin-sidebar button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    width: 100%;
+    min-height: var(--target-min);
+    padding-inline: var(--space-1-5);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: none;
+    color: var(--admin-sidebar-text);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    text-decoration: none;
+    text-align: left;
+  }
+
+  .admin-sidebar a:hover,
+  .admin-sidebar button:hover {
+    background: color-mix(in srgb, var(--white) 8%, transparent);
+    color: var(--white);
+  }
+
+  .admin-sidebar a[aria-current='page'] {
+    background: var(--admin-sidebar-active-bg);
+    color: var(--white);
+    box-shadow: inset 3px 0 0 var(--brand-ice);
+  }
+
+  .admin-sidebar__foot {
+    display: grid;
+    gap: 2px;
+    margin-top: auto;
+    padding-top: var(--space-2);
+    border-top: 1px solid color-mix(in srgb, var(--brand-ice) 18%, transparent);
+  }
+
+  .admin-sidebar__user {
+    font-weight: var(--fw-regular);
+  }
+
+  .admin-main {
+    padding: var(--space-3) var(--page-inline) var(--space-8);
+    min-width: 0;
+  }
+
+  .admin-main:focus {
+    outline: none;
+  }
+
+  .admin-crumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    font-size: var(--fs-sm);
+    color: var(--text-supporting);
+  }
+
+  .admin-crumbs li + li::before {
+    content: '/';
+    margin-right: var(--space-1);
+  }
+
+  .admin-title {
+    margin-block: var(--space-1) var(--space-3);
+    font-size: var(--fs-h2);
+  }
+
+  @media (min-width: 1025px) {
+    .admin-shell {
+      grid-template-columns: 248px minmax(0, 1fr);
+    }
+
+    .admin-sidebar {
+      position: sticky;
+      top: 0;
+      height: 100dvh;
+    }
+  }
+
+  /* ----- Shared admin components ----- */
+  .admin-card {
+    padding: var(--space-3);
+    background: var(--white);
+    border: var(--border-thin);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .admin-card + .admin-card {
+    margin-top: var(--space-3);
+  }
+
+  .admin-card h2 {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-2);
+  }
+
+  .admin-flash {
+    display: flex;
+    gap: var(--space-1-5);
+    align-items: flex-start;
+    margin-bottom: var(--space-3);
+    padding: var(--space-1-5) var(--space-2);
+    border-radius: var(--radius-md);
+    border: 1.5px solid;
+    font-size: var(--fs-sm);
+  }
+
+  .admin-flash--success {
+    background: var(--color-success-bg);
+    border-color: var(--color-success);
+    color: var(--color-success);
+  }
+
+  .admin-flash--error {
+    background: var(--color-error-bg);
+    border-color: var(--color-error);
+    color: var(--color-error);
+  }
+
+  .admin-flash--info {
+    background: var(--ice-100);
+    border-color: var(--brand-steel);
+    color: var(--brand-solar);
+  }
+
+  .admin-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    min-height: var(--target-min);
+    padding-inline: var(--space-2);
+    border: 1.5px solid transparent;
+    border-radius: var(--radius-md);
+    font-family: var(--font-heading);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .admin-btn--primary {
+    background: var(--btn-primary-bg);
+    color: var(--btn-primary-text);
+  }
+
+  .admin-btn--primary:hover {
+    background: var(--btn-primary-bg-hover);
+    color: var(--btn-primary-text);
+  }
+
+  .admin-btn--secondary {
+    background: var(--btn-secondary-bg);
+    color: var(--btn-secondary-text);
+    border-color: var(--btn-secondary-border);
+  }
+
+  .admin-btn--secondary:hover {
+    background: var(--btn-secondary-bg-hover);
+  }
+
+  .admin-btn--danger {
+    background: var(--white);
+    color: var(--color-error);
+    border-color: var(--color-error);
+  }
+
+  .admin-btn--danger:hover {
+    background: var(--color-error-bg);
+  }
+
+  .admin-field {
+    display: grid;
+    gap: 6px;
+    align-content: start;
+  }
+
+  .admin-field label,
+  .admin-field legend {
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+  }
+
+  .admin-field input:not([type='checkbox']):not([type='radio']),
+  .admin-field select,
+  .admin-field textarea {
+    width: 100%;
+    min-height: var(--target-min);
+    padding: 0.5rem 0.75rem;
+    border: 1.5px solid var(--color-border-control);
+    border-radius: var(--radius-md);
+    background: var(--white);
+    font-size: var(--fs-base);
+  }
+
+  .admin-field textarea {
+    min-height: 110px;
+    resize: vertical;
+  }
+
+  .admin-field [aria-invalid='true'] {
+    border-color: var(--color-error);
+  }
+
+  .admin-hint {
+    font-size: var(--fs-xs);
+    color: var(--text-supporting);
+  }
+
+  .admin-error {
+    font-size: var(--fs-sm);
+    color: var(--color-error);
+    font-weight: var(--fw-medium);
+  }
+
+  .admin-check {
+    display: flex;
+    gap: var(--space-1);
+    align-items: center;
+    min-height: 32px;
+    font-size: var(--fs-sm);
+  }
+
+  .admin-check input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--brand-solar);
+  }
+
+  .admin-table-wrap {
+    overflow-x: auto;
+    background: var(--white);
+    border: var(--border-thin);
+    border-radius: var(--radius-lg);
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-sm);
+  }
+
+  .admin-table th,
+  .admin-table td {
+    padding: var(--space-1-5) var(--space-2);
+    border-bottom: var(--border-thin);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .admin-table thead th {
+    background: var(--ice-100);
+    color: var(--text-secondary);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .admin-table tbody tr:hover {
+    background: var(--ice-50);
+  }
+
+  .admin-table tbody tr:last-child > * {
+    border-bottom: 0;
+  }
+
+  .admin-empty {
+    padding: var(--space-6) var(--space-3);
+    text-align: center;
+    color: var(--text-secondary);
+  }
+
+  .admin-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border-radius: var(--radius-pill);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+
+  .admin-badge--available,
+  .admin-badge--resolved,
+  .admin-badge--on {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+    border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
+  }
+
+  .admin-badge--limited,
+  .admin-badge--in_progress {
+    background: var(--ice-100);
+    color: var(--brand-solar);
+    border-color: var(--brand-soft);
+  }
+
+  .admin-badge--planned,
+  .admin-badge--new {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+    border-color: var(--color-warning-border);
+  }
+
+  .admin-badge--unconfirmed,
+  .admin-badge--off,
+  .admin-badge--draft {
+    background: var(--white);
+    color: var(--text-secondary);
+    border-color: var(--color-border-control);
+  }
+
+  .admin-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1-5);
+    align-items: flex-end;
+    margin-bottom: var(--space-2);
+  }
+
+  .admin-toolbar .admin-field {
+    flex: 1 1 180px;
+  }
+
+  .admin-pager {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--space-2);
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+  }
+
+  .admin-confirm {
+    width: min(440px, calc(100% - 2rem));
+    margin: auto;
+    padding: var(--space-3);
+    border: 0;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .admin-confirm::backdrop {
+    background: var(--overlay-scrim);
+  }
+
+  .admin-confirm h2 {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-1);
+  }
+
+  .admin-confirm__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-1);
+    margin-top: var(--space-3);
+  }
+
+  .admin-inline-form {
+    display: inline;
+  }
+</style>

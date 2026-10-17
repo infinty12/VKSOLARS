@@ -1,0 +1,6 @@
+---
+// Hidden CSRF field for admin forms. Middleware rejects state-changing requests without it.
+const token = Astro.locals.admin?.csrfToken ?? '';
+---
+
+<input type="hidden" name="_csrf" value={token} />

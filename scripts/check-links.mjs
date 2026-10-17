@@ -1,10 +1,12 @@
-// Static link check over the built site (run after `npm run build`).
+// Link check over the crawled site (run `npm run build && npm run snapshot` first).
 // Fails on: href="#" / empty hrefs, internal links to pages that don't exist,
 // and in-page anchors (#id) that don't exist on the target page.
+//   node scripts/check-links.mjs [pagesDir=.snapshot] [assetsDir=dist/client]
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { join, relative, sep, resolve } from 'node:path';
 
-const dist = new URL('../dist/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+const dist = resolve(process.argv[2] ?? '.snapshot');
+const assets = resolve(process.argv[3] ?? 'dist/client');
 
 function htmlFiles(dir) {
   return readdirSync(dir).flatMap((name) => {
@@ -45,7 +47,7 @@ for (const [route, { hrefs }] of pages) {
     const normalised = path.length > 1 ? path.replace(/\/$/, '') : path;
     const target = pages.get(normalised);
     if (!target) {
-      const asset = join(dist, normalised);
+      const asset = join(assets, normalised);
       if (!existsSync(asset)) problems.push(`${route}: broken link ${href}`);
       continue;
     }

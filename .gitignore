@@ -17,6 +17,8 @@ test-results/
 # runtime data: database, uploads, backups, logs (never commit — may contain enquiries/personal data)
 storage/
 test-storage/
+*-test-storage/
+.snapshot/
 *.db
 *.db-journal
 *.db-wal

@@ -1,12 +1,16 @@
-// SEO output check for a built site.
-// Usage: node scripts/check-seo.mjs [distDir] [expectedSiteUrl]
+// SEO output check for a crawled site.
+// Usage: node scripts/check-seo.mjs [pagesDir=.snapshot] [expectedSiteUrl] [assetsDir=dist/client]
 //   With a site URL: canonical, og:url, og:image, sitemap and robots Sitemap line must all be present and correct.
 //   Without one:     none of those may be emitted (nothing should point at an unknown domain).
+// Pages come from the crawl; static files (og image, sitemap) from the build's client folder.
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { join, relative, sep, resolve } from 'node:path';
 
-const dist = process.argv[2] ?? 'dist';
-const siteUrl = process.argv[3] ?? null;
+const dist = resolve(process.argv[2] ?? '.snapshot');
+const siteUrl = process.argv[3] || null;
+const assets = resolve(process.argv[4] ?? 'dist/client');
+/** Look in the crawl first, then the build's static files. */
+const fileIn = (name) => [join(dist, name), join(assets, name)].find((p) => existsSync(p));
 const problems = [];
 const fail = (msg) => problems.push(msg);
 
@@ -65,8 +69,8 @@ for (const { path, html } of pages) {
     if (ogUrl !== canonical) fail(`${path}: og:url ${ogUrl} ≠ canonical`);
     if (!ogImage) fail(`${path}: missing og:image`);
     else {
-      const local = join(dist, new URL(ogImage).pathname);
-      if (!existsSync(local)) fail(`${path}: og:image ${ogImage} does not exist in build`);
+      const local = fileIn(new URL(ogImage).pathname);
+      if (!local) fail(`${path}: og:image ${ogImage} does not exist in build`);
       else {
         const size = jpegSize(readFileSync(local));
         if (!ogImage.endsWith('.jpg')) fail(`${path}: og:image extension is not .jpg`);
@@ -79,14 +83,16 @@ for (const { path, html } of pages) {
   }
 }
 
-const robots = existsSync(join(dist, 'robots.txt')) ? readFileSync(join(dist, 'robots.txt'), 'utf8') : null;
+const robotsFile = fileIn('robots.txt');
+const robots = robotsFile ? readFileSync(robotsFile, 'utf8') : null;
 if (!robots) fail('robots.txt missing');
 else if (siteUrl && !robots.includes(`Sitemap: ${new URL('sitemap-index.xml', siteUrl).href}`)) fail('robots.txt missing Sitemap line');
 else if (!siteUrl && /Sitemap:/i.test(robots)) fail('robots.txt references a sitemap without a domain');
 
 if (siteUrl) {
-  const sitemap = existsSync(join(dist, 'sitemap-0.xml')) ? readFileSync(join(dist, 'sitemap-0.xml'), 'utf8') : '';
-  if (!existsSync(join(dist, 'sitemap-index.xml'))) fail('sitemap-index.xml missing');
+  const sitemapFile = fileIn('sitemap-0.xml');
+  const sitemap = sitemapFile ? readFileSync(sitemapFile, 'utf8') : '';
+  if (!fileIn('sitemap-index.xml')) fail('sitemap-index.xml missing');
   const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
   for (const p of indexable) {
     const url = new URL(p.path.endsWith('/') ? p.path : `${p.path}/`, siteUrl).href;
@@ -94,7 +100,7 @@ if (siteUrl) {
   }
   if (locs.some((l) => l.includes('404'))) fail('sitemap includes the 404 page');
   console.log(`sitemap URLs (${locs.length}):\n  ${locs.join('\n  ')}`);
-} else if (existsSync(join(dist, 'sitemap-index.xml'))) {
+} else if (fileIn('sitemap-index.xml')) {
   fail('sitemap generated without a domain');
 }
 

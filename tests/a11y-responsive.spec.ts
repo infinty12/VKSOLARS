@@ -78,10 +78,10 @@ test.describe('responsive layout', () => {
     }
   });
 
-  test('reduced motion: content is visible without animation', async ({ browser }) => {
+  test('reduced motion: content is visible without animation', async ({ browser, baseURL }) => {
     const context = await browser.newContext({ reducedMotion: 'reduce' });
     const page = await context.newPage();
-    await page.goto('http://localhost:4321/');
+    await page.goto(`${baseURL}/`);
     const opacity = await page.locator('.service-card').last().evaluate((el) => getComputedStyle(el).opacity);
     expect(opacity).toBe('1');
     await context.close();

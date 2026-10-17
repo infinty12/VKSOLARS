@@ -1,0 +1,215 @@
+---
+import { randomBytes } from 'node:crypto';
+import '../../styles/fonts.css';
+import '../../styles/global.css';
+import Icon from '../../components/Icon.astro';
+import { SESSION, LOGIN_LIMIT } from '../../lib/server/config.ts';
+import {
+  adminCount,
+  checkCredentials,
+  clearLoginFailures,
+  createSession,
+  loginLockedUntil,
+  recordLoginFailure,
+} from '../../lib/server/auth.ts';
+import { audit } from '../../lib/server/audit.ts';
+import { safeEqual } from '../../lib/server/secret.ts';
+import { clientIp, safeAdminRedirect, setStrictCookie } from '../../lib/server/http.ts';
+
+if (Astro.locals.admin) return Astro.redirect('/admin', 303);
+
+const next = safeAdminRedirect(Astro.url.searchParams.get('next'));
+let error: string | null = null;
+let username = '';
+const noAdmin = adminCount() === 0;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  username = String(form.get('username') ?? '').trim().slice(0, 40);
+  const password = String(form.get('password') ?? '').slice(0, 256);
+  const formToken = String(form.get('_csrf') ?? '');
+  const cookieToken = Astro.cookies.get(SESSION.loginCsrfCookie)?.value ?? '';
+  const ip = clientIp(() => Astro.clientAddress);
+  const keys = [`ip:${ip}`, `user:${username.toLowerCase()}`];
+
+  if (!cookieToken || !safeEqual(formToken, cookieToken)) {
+    error = 'Your session expired. Please try again.';
+  } else if (loginLockedUntil(keys)) {
+    error = `Too many failed sign-in attempts. Try again in ${Math.round(LOGIN_LIMIT.lockMs / 60000)} minutes.`;
+    audit('login.blocked', { detail: { reason: 'rate_limited' } });
+  } else {
+    const user = username && password ? checkCredentials(username, password) : null;
+    if (user) {
+      clearLoginFailures(keys);
+      const { token } = createSession(user.id, Astro.request.headers.get('user-agent'));
+      setStrictCookie(Astro.cookies, Astro.url, SESSION.cookieName, token, { maxAgeSec: Math.floor(SESSION.absoluteMs / 1000) });
+      Astro.cookies.delete(SESSION.loginCsrfCookie, { path: '/admin' });
+      audit('login.success', { userId: user.id });
+      return Astro.redirect(next, 303);
+    }
+    recordLoginFailure(keys);
+    audit('login.failure', { detail: { reason: 'bad_credentials' } });
+    // One generic message: never reveal whether the username exists.
+    error = 'Incorrect username or password.';
+  }
+  Astro.response.status = error?.startsWith('Too many') ? 429 : 401;
+}
+
+// Fresh double-submit token for the login form (no session exists yet).
+const loginToken = randomBytes(24).toString('base64url');
+setStrictCookie(Astro.cookies, Astro.url, SESSION.loginCsrfCookie, loginToken, { path: '/admin', maxAgeSec: 1800 });
+---
+
+<!doctype html>
+<html lang="en-IN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Sign in · VK Solar Admin</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body class="login-page">
+    <main class="login" id="main">
+      <div class="login__card">
+        <p class="login__brand">VK Solar <span>Admin</span></p>
+        <h1>Sign in</h1>
+        {
+          noAdmin && (
+            <div class="login__note" role="note">
+              <Icon name="info" size={20} />
+              <p>
+                No administrator exists yet. Create one from a terminal in the project folder with
+                <code>npm run admin:create</code>.
+              </p>
+            </div>
+          )
+        }
+        {
+          error && (
+            <div class="login__error" role="alert">
+              <Icon name="alert" size={20} />
+              <p>{error}</p>
+            </div>
+          )
+        }
+        <form method="post" class="login__form">
+          <input type="hidden" name="_csrf" value={loginToken} />
+          <div class="login__field">
+            <label for="username">Username</label>
+            <input id="username" name="username" type="text" autocomplete="username" required maxlength="40" value={username} />
+          </div>
+          <div class="login__field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="256" />
+          </div>
+          <button type="submit" class="login__submit">Sign in</button>
+        </form>
+        <p class="login__back"><a href="/">← Back to website</a></p>
+      </div>
+    </main>
+  </body>
+</html>
+
+<style>
+  .login-page {
+    background: var(--gradient-hero);
+  }
+
+  .login {
+    display: grid;
+    place-items: center;
+    min-height: 100dvh;
+    padding: var(--space-3) var(--page-inline);
+  }
+
+  .login__card {
+    width: min(420px, 100%);
+    padding: var(--space-4);
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .login__brand {
+    font-family: var(--font-heading);
+    font-weight: var(--fw-bold);
+    color: var(--brand-solar);
+  }
+
+  .login__brand span {
+    font-weight: var(--fw-medium);
+    color: var(--text-supporting);
+  }
+
+  h1 {
+    margin-block: var(--space-1) var(--space-3);
+    font-size: var(--fs-h3);
+  }
+
+  .login__form {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .login__field {
+    display: grid;
+    gap: 6px;
+  }
+
+  .login__field label {
+    font-weight: var(--fw-semibold);
+    font-size: var(--fs-sm);
+  }
+
+  .login__field input {
+    min-height: 48px;
+    padding: 0.625rem 0.75rem;
+    border: 1.5px solid var(--color-border-control);
+    border-radius: var(--radius-md);
+    font-size: var(--fs-base);
+  }
+
+  .login__submit {
+    min-height: 48px;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--btn-primary-bg);
+    color: var(--btn-primary-text);
+    font-family: var(--font-heading);
+    font-weight: var(--fw-semibold);
+    font-size: var(--fs-base);
+  }
+
+  .login__submit:hover {
+    background: var(--btn-primary-bg-hover);
+  }
+
+  .login__error,
+  .login__note {
+    display: flex;
+    gap: var(--space-1);
+    align-items: flex-start;
+    margin-bottom: var(--space-2);
+    padding: var(--space-1-5);
+    border-radius: var(--radius-md);
+    font-size: var(--fs-sm);
+  }
+
+  .login__error {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+    border: 1.5px solid var(--color-error);
+  }
+
+  .login__note {
+    background: var(--ice-100);
+    color: var(--brand-solar);
+    border: 1.5px solid var(--brand-steel);
+  }
+
+  .login__back {
+    margin-top: var(--space-3);
+    font-size: var(--fs-sm);
+  }
+</style>

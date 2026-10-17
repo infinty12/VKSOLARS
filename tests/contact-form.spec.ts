@@ -77,9 +77,13 @@ test('without a configured key, a valid submit reports it was NOT sent and makes
 
 test('successful submission shows success only after the provider confirms, and resets the form', async ({ page }) => {
   let body: Record<string, unknown> = {};
+  // Hold the provider's reply until the loading state has been checked, so the assertion
+  // can't race a fixed delay on a busy machine.
+  let release!: () => void;
+  const released = new Promise<void>((r) => (release = r));
   await page.route(ENDPOINT, async (route) => {
     body = route.request().postDataJSON();
-    await new Promise((r) => setTimeout(r, 400));
+    await released;
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
   });
   await page.goto('/contact');
@@ -88,10 +92,11 @@ test('successful submission shows success only after the provider confirms, and 
 
   const submit = page.locator('[data-submit]');
   await submit.click();
-  // Loading state blocks duplicate submissions.
+  // Loading state blocks duplicate submissions, and no success is shown before the provider replies.
   await expect(submit).toBeDisabled();
   await expect(submit).toContainText('Sending');
   await expect(page.locator('[data-status]')).not.toContainText(/thank you/i);
+  release();
 
   await expect(page.locator('[data-status]')).toContainText('your enquiry has been sent');
   await expect(submit).toBeEnabled();
