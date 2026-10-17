@@ -1,0 +1,38 @@
+---
+import { icons, type IconName } from './icons';
+
+interface Props {
+  name: IconName;
+  size?: number;
+  /** Accessible name. Omit for decorative icons (they are hidden from assistive tech). */
+  label?: string;
+  class?: string;
+  strokeWidth?: number;
+}
+
+const { name, size = 24, label, class: className, strokeWidth = 1.75 } = Astro.props;
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width={size}
+  height={size}
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width={strokeWidth}
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class:list={['icon', className]}
+  aria-hidden={label ? undefined : 'true'}
+  role={label ? 'img' : undefined}
+  aria-label={label}
+  focusable="false"
+  set:html={icons[name]}
+/>
+
+<style>
+  .icon {
+    flex-shrink: 0;
+  }
+</style>

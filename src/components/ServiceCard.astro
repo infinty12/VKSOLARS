@@ -1,0 +1,115 @@
+---
+import Icon from './Icon.astro';
+import type { Service } from '../data/services';
+import { serviceHref } from '../data/services';
+
+interface Props {
+  service: Service;
+  index?: number;
+  headingLevel?: 'h3' | 'h4';
+}
+
+const { service, index, headingLevel = 'h3' } = Astro.props;
+const Heading = headingLevel;
+const href = serviceHref(service.slug);
+---
+
+<article class="service-card" data-reveal style={index !== undefined ? `--reveal-delay: ${(index % 4) * 50}ms` : undefined}>
+  <span class="service-card__icon"><Icon name={service.icon} size={26} /></span>
+  <Heading class="service-card__title">
+    <a href={href} class="service-card__link">{service.title}</a>
+  </Heading>
+  <p class="service-card__summary">{service.summary}</p>
+  <span class="service-card__more" aria-hidden="true">
+    Learn more <Icon name="arrowRight" size={18} />
+  </span>
+</article>
+
+<style>
+  .service-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1-5);
+    height: 100%;
+    padding: var(--space-3);
+    background: var(--color-surface);
+    border: var(--border-thin);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+    transition:
+      transform var(--dur-base) var(--ease-out),
+      box-shadow var(--dur-base) var(--ease-standard),
+      border-color var(--dur-base) var(--ease-standard);
+  }
+
+  .service-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-border-strong);
+  }
+
+  .service-card:focus-within {
+    border-color: var(--blue-500);
+  }
+
+  .service-card__icon {
+    display: inline-grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: var(--radius-md);
+    background: var(--sky-50);
+    color: var(--blue-700);
+    border: 1px solid var(--sky-100);
+  }
+
+  .service-card__title {
+    font-size: var(--fs-h4);
+  }
+
+  .service-card__link {
+    color: var(--navy-900);
+    text-decoration: none;
+  }
+
+  /* Whole card is clickable; the link text remains the accessible name. */
+  .service-card__link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+
+  .service-card__link:focus-visible {
+    outline: none;
+  }
+
+  .service-card__link:focus-visible::after {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 3px;
+  }
+
+  .service-card__summary {
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+    flex-grow: 1;
+  }
+
+  .service-card__more {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-0-5);
+    color: var(--blue-700);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+  }
+
+  .service-card__more :global(.icon) {
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+
+  .service-card:hover .service-card__more :global(.icon) {
+    transform: translateX(3px);
+  }
+</style>

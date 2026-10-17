@@ -1,0 +1,600 @@
+---
+import Icon from './Icon.astro';
+import { site, telLink, whatsappLink } from '../config/site';
+import { services } from '../data/services';
+import { LIMITS } from '../lib/enquiry';
+
+const key = site.form.web3formsKey;
+const tel = telLink();
+const wa = whatsappLink();
+const serviceOptions = [...services.map((s) => ({ value: s.slug, label: s.title })), { value: 'not-sure', label: 'Not sure — please recommend' }];
+const fallback = tel
+  ? `Please call us on ${site.contact.phoneDisplay ?? site.contact.phone}`
+  : wa
+    ? 'Please message us on WhatsApp'
+    : site.contact.email
+      ? `Please email ${site.contact.email}`
+      : null;
+---
+
+<form
+  class="enquiry"
+  action={site.form.endpoint}
+  method="post"
+  novalidate
+  data-enquiry
+  data-endpoint={site.form.endpoint}
+  data-configured={key ? 'true' : 'false'}
+  data-services={JSON.stringify(serviceOptions.map((o) => o.value))}
+  data-fallback={fallback ?? ''}
+  aria-describedby="enquiry-required-note"
+>
+  {key && <input type="hidden" name="access_key" value={key} />}
+  <input type="hidden" name="subject" value={`New enquiry — ${site.shortName} website`} />
+  <input type="hidden" name="from_name" value={`${site.shortName} website`} />
+
+  <!-- Spam trap: hidden from people, often filled in by bots. Web3Forms rejects submissions where it is checked. -->
+  <div class="enquiry__trap" aria-hidden="true">
+    <label>Leave this box unchecked <input type="checkbox" name="botcheck" tabindex="-1" /></label>
+  </div>
+
+  {
+    !key && (
+      <div class="enquiry__unconfigured" role="note" data-unconfigured>
+        <Icon name="info" size={20} />
+        <p>
+          <strong>Online enquiries are not active yet.</strong> This form is not connected to an inbox, so it cannot send
+          messages.
+          {fallback ? ` ${fallback}.` : ' Please check back soon.'}
+        </p>
+      </div>
+    )
+  }
+
+  <div class="enquiry__summary" data-error-summary tabindex="-1" hidden>
+    <h3><Icon name="alert" size={20} /> Please fix the following</h3>
+    <ul role="list" data-error-list></ul>
+  </div>
+
+  <p id="enquiry-required-note" class="enquiry__note">Fields marked <span aria-hidden="true">*</span><span class="sr-only">required</span> are required.</p>
+
+  <div class="enquiry__grid">
+    <div class="field">
+      <label for="f-name">Full name <span class="field__req" aria-hidden="true">*</span></label>
+      <input
+        id="f-name"
+        name="name"
+        type="text"
+        autocomplete="name"
+        required
+        minlength={LIMITS.nameMin}
+        maxlength={LIMITS.nameMax}
+        aria-describedby="f-name-error"
+      />
+      <p class="field__error" id="f-name-error" data-error-for="name"></p>
+    </div>
+
+    <div class="field">
+      <label for="f-phone">Phone number <span class="field__req" aria-hidden="true">*</span></label>
+      <input
+        id="f-phone"
+        name="phone"
+        type="tel"
+        inputmode="tel"
+        autocomplete="tel"
+        required
+        maxlength="20"
+        aria-describedby="f-phone-hint f-phone-error"
+      />
+      <p class="field__hint" id="f-phone-hint">Mobile or landline, e.g. 98765 43210</p>
+      <p class="field__error" id="f-phone-error" data-error-for="phone"></p>
+    </div>
+
+    <div class="field">
+      <label for="f-location">Site location <span class="field__req" aria-hidden="true">*</span></label>
+      <input
+        id="f-location"
+        name="location"
+        type="text"
+        autocomplete="address-level2"
+        required
+        maxlength={LIMITS.locationMax}
+        aria-describedby="f-location-hint f-location-error"
+      />
+      <p class="field__hint" id="f-location-hint">City, town or industrial area in Rajasthan</p>
+      <p class="field__error" id="f-location-error" data-error-for="location"></p>
+    </div>
+
+    <div class="field">
+      <label for="f-service">Service required <span class="field__req" aria-hidden="true">*</span></label>
+      <div class="field__select">
+        <select id="f-service" name="service" required aria-describedby="f-service-error">
+          <option value="">Select a service</option>
+          {serviceOptions.map((o) => <option value={o.value}>{o.label}</option>)}
+        </select>
+        <Icon name="chevronRight" size={18} class="field__chevron" />
+      </div>
+      <p class="field__error" id="f-service-error" data-error-for="service"></p>
+    </div>
+
+    <div class="field field--full">
+      <label for="f-message">Message <span class="field__optional">(optional)</span></label>
+      <textarea
+        id="f-message"
+        name="message"
+        rows="5"
+        maxlength={LIMITS.messageMax}
+        aria-describedby="f-message-hint f-message-error"></textarea>
+      <p class="field__hint" id="f-message-hint">
+        Tell us about your system size, rooftop or ground-mount, and any issues you’ve noticed.
+        <span class="field__count mono" data-count aria-live="polite">0 / {LIMITS.messageMax}</span>
+      </p>
+      <p class="field__error" id="f-message-error" data-error-for="message"></p>
+    </div>
+  </div>
+
+  <div class="enquiry__footer">
+    <button type="submit" class="enquiry__submit" data-submit>
+      <span class="enquiry__spinner" aria-hidden="true"></span>
+      <span data-submit-label>Request free inspection</span>
+      <Icon name="arrowRight" size={20} />
+    </button>
+    <p class="enquiry__privacy">We use your details only to respond to this enquiry.</p>
+  </div>
+
+  <div class="enquiry__status" data-status role="status" aria-live="polite" tabindex="-1"></div>
+</form>
+
+<script>
+  import { validateEnquiry, type EnquiryValues, type EnquiryErrors } from '../lib/enquiry';
+
+  const TIMEOUT_MS = 15000;
+
+  document.querySelectorAll<HTMLFormElement>('[data-enquiry]').forEach((form) => {
+    const serviceSlugs: string[] = JSON.parse(form.dataset.services ?? '[]');
+    const endpoint = form.dataset.endpoint ?? '';
+    const fallback = form.dataset.fallback ?? '';
+    const summary = form.querySelector<HTMLElement>('[data-error-summary]')!;
+    const summaryList = form.querySelector<HTMLElement>('[data-error-list]')!;
+    const status = form.querySelector<HTMLElement>('[data-status]')!;
+    const submit = form.querySelector<HTMLButtonElement>('[data-submit]')!;
+    const submitLabel = form.querySelector<HTMLElement>('[data-submit-label]')!;
+    const message = form.querySelector<HTMLTextAreaElement>('[name="message"]')!;
+    const counter = form.querySelector<HTMLElement>('[data-count]');
+    const fields = ['name', 'phone', 'location', 'service', 'message'] as const;
+    const touched = new Set<string>();
+    let submitting = false;
+
+    // Pre-fill from the URL, e.g. /contact?service=ac-service&location=Jaipur
+    const params = new URLSearchParams(window.location.search);
+    const preService = params.get('service');
+    const preLocation = params.get('location');
+    const serviceSelect = form.querySelector<HTMLSelectElement>('[name="service"]')!;
+    if (preService && serviceSlugs.includes(preService)) serviceSelect.value = preService;
+    if (preLocation) form.querySelector<HTMLInputElement>('[name="location"]')!.value = preLocation.slice(0, 120);
+
+    const control = (name: string) => form.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[name="${name}"]`)!;
+
+    const values = (): EnquiryValues => ({
+      name: control('name').value,
+      phone: control('phone').value,
+      location: control('location').value,
+      service: control('service').value,
+      message: control('message').value,
+    });
+
+    const showFieldError = (name: string, text?: string) => {
+      const el = control(name);
+      const slot = form.querySelector<HTMLElement>(`[data-error-for="${name}"]`)!;
+      slot.textContent = text ?? '';
+      if (text) el.setAttribute('aria-invalid', 'true');
+      else el.removeAttribute('aria-invalid');
+    };
+
+    const renderErrors = (errors: EnquiryErrors, only?: string) => {
+      fields.forEach((f) => {
+        if (only && f !== only) return;
+        showFieldError(f, errors[f]);
+      });
+    };
+
+    const setStatus = (kind: 'success' | 'error' | 'info' | '', html: string) => {
+      status.className = `enquiry__status${kind ? ` enquiry__status--${kind}` : ''}`;
+      status.innerHTML = html;
+    };
+
+    const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+    // Validate a field once the user has finished with it, then live while they correct it.
+    fields.forEach((f) => {
+      const el = control(f);
+      el.addEventListener('blur', () => {
+        if (!el.value && f !== 'service') return;
+        touched.add(f);
+        renderErrors(validateEnquiry(values(), serviceSlugs), f);
+      });
+      el.addEventListener('input', () => {
+        if (touched.has(f)) renderErrors(validateEnquiry(values(), serviceSlugs), f);
+      });
+      el.addEventListener('change', () => {
+        if (touched.has(f)) renderErrors(validateEnquiry(values(), serviceSlugs), f);
+      });
+    });
+
+    const updateCount = () => {
+      if (counter) counter.textContent = `${message.value.length} / ${message.maxLength}`;
+    };
+    message.addEventListener('input', updateCount);
+    updateCount();
+
+    const setBusy = (busy: boolean) => {
+      submitting = busy;
+      submit.disabled = busy;
+      form.setAttribute('aria-busy', String(busy));
+      submit.classList.toggle('is-loading', busy);
+      submitLabel.textContent = busy ? 'Sending…' : 'Request free inspection';
+    };
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (submitting) return; // prevent duplicate submissions
+
+      const data = values();
+      const errors = validateEnquiry(data, serviceSlugs);
+      fields.forEach((f) => touched.add(f));
+      renderErrors(errors);
+
+      const entries = Object.entries(errors) as [keyof EnquiryValues, string][];
+      if (entries.length) {
+        summaryList.innerHTML = entries
+          .map(([f, msg]) => `<li><a href="#${control(f).id}">${escapeHtml(msg)}</a></li>`)
+          .join('');
+        summary.hidden = false;
+        setStatus('', '');
+        summary.focus();
+        return;
+      }
+      summary.hidden = true;
+
+      // Read at submit time (not page load) so tests can exercise the connected state with a mocked endpoint.
+      if (form.dataset.configured !== 'true') {
+        setStatus(
+          'error',
+          `<strong>The online form isn’t connected yet, so your message was not sent.</strong> ${
+            fallback ? `${escapeHtml(fallback)} instead.` : 'Please try again later.'
+          }`,
+        );
+        status.focus();
+        return;
+      }
+
+      setBusy(true);
+      setStatus('info', 'Sending your enquiry…');
+
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), TIMEOUT_MS);
+      try {
+        const payload = Object.fromEntries(new FormData(form).entries());
+        payload.phone = data.phone.trim();
+        payload.service = serviceSelect.selectedOptions[0]?.textContent ?? data.service;
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        const result = (await response.json().catch(() => null)) as { success?: boolean; message?: string } | null;
+
+        if (response.ok && result?.success) {
+          form.reset();
+          touched.clear();
+          updateCount();
+          renderErrors({});
+          setStatus(
+            'success',
+            '<strong>Thank you — your enquiry has been sent.</strong> Our team will contact you to arrange your inspection.',
+          );
+        } else {
+          throw new Error(result?.message || `Request failed (${response.status})`);
+        }
+      } catch (error) {
+        const aborted = error instanceof DOMException && error.name === 'AbortError';
+        setStatus(
+          'error',
+          `<strong>${aborted ? 'The request timed out' : 'Sorry, your enquiry could not be sent'}.</strong> Your details are still in the form — please try again${
+            fallback ? `, or ${escapeHtml(fallback.charAt(0).toLowerCase() + fallback.slice(1))}` : ''
+          }.`,
+        );
+      } finally {
+        window.clearTimeout(timer);
+        setBusy(false);
+        status.focus();
+      }
+    });
+  });
+</script>
+
+<style>
+  .enquiry {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .enquiry__trap {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  .enquiry__unconfigured {
+    display: flex;
+    gap: var(--space-1-5);
+    align-items: flex-start;
+    padding: var(--space-2);
+    border: 1.5px solid var(--color-warning-border);
+    border-radius: var(--radius-md);
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+    font-size: var(--fs-sm);
+  }
+
+  .enquiry__unconfigured :global(.icon) {
+    margin-top: 2px;
+  }
+
+  .enquiry__note {
+    color: var(--text-supporting);
+    font-size: var(--fs-sm);
+  }
+
+  .enquiry__grid {
+    display: grid;
+    gap: var(--space-3) var(--space-2);
+  }
+
+  @media (min-width: 641px) {
+    .enquiry__grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .field--full {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .field {
+    display: grid;
+    gap: 6px;
+    align-content: start;
+  }
+
+  .field label {
+    font-weight: var(--fw-semibold);
+    font-size: var(--fs-sm);
+    color: var(--text-primary);
+  }
+
+  .field__req {
+    color: var(--color-error);
+  }
+
+  .field__optional {
+    font-weight: var(--fw-regular);
+    color: var(--text-supporting);
+  }
+
+  .field input,
+  .field select,
+  .field textarea {
+    width: 100%;
+    min-height: 48px;
+    padding: 0.75rem 0.875rem;
+    border: 1.5px solid var(--color-border-control);
+    border-radius: var(--radius-md);
+    background: var(--white);
+    color: var(--text-primary);
+    font-size: var(--fs-base); /* ≥16px prevents iOS zoom on focus */
+    transition:
+      border-color var(--dur-fast) var(--ease-standard),
+      box-shadow var(--dur-fast) var(--ease-standard);
+  }
+
+  .field textarea {
+    resize: vertical;
+    min-height: 132px;
+  }
+
+  .field input:hover,
+  .field select:hover,
+  .field textarea:hover {
+    border-color: var(--blue-500);
+  }
+
+  .field input:focus-visible,
+  .field select:focus-visible,
+  .field textarea:focus-visible {
+    outline: none;
+    border-color: var(--blue-700);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-steel) 35%, transparent);
+  }
+
+  .field [aria-invalid='true'] {
+    border-color: var(--color-error);
+    background: var(--color-error-bg);
+  }
+
+  .field [aria-invalid='true']:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error) 20%, transparent);
+  }
+
+  .field__select {
+    position: relative;
+  }
+
+  .field__select select {
+    appearance: none;
+    padding-right: 2.5rem;
+  }
+
+  .field__select :global(.field__chevron) {
+    position: absolute;
+    right: 0.875rem;
+    top: 50%;
+    transform: translateY(-50%) rotate(90deg);
+    color: var(--text-supporting);
+    pointer-events: none;
+  }
+
+  .field__hint {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-1);
+    color: var(--text-supporting);
+    font-size: var(--fs-xs);
+  }
+
+  .field__count {
+    flex-shrink: 0;
+  }
+
+  .field__error {
+    color: var(--color-error);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+  }
+
+  .field__error:empty {
+    display: none;
+  }
+
+  .enquiry__summary {
+    padding: var(--space-2) var(--space-3);
+    border: 1.5px solid var(--color-error);
+    border-radius: var(--radius-md);
+    background: var(--color-error-bg);
+  }
+
+  .enquiry__summary h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-error);
+    font-size: var(--fs-base);
+    margin-bottom: var(--space-1);
+  }
+
+  .enquiry__summary ul {
+    display: grid;
+    gap: 2px;
+    padding-left: var(--space-4);
+    list-style: disc;
+  }
+
+  .enquiry__summary a {
+    color: var(--color-error);
+    font-size: var(--fs-sm);
+  }
+
+  .enquiry__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .enquiry__submit {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    min-height: 52px;
+    padding-inline: var(--space-4);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--gradient-cta);
+    background-color: var(--blue-700);
+    color: var(--white);
+    font-family: var(--font-heading);
+    font-size: var(--fs-md);
+    font-weight: var(--fw-semibold);
+    box-shadow: var(--shadow-sm);
+    transition:
+      box-shadow var(--dur-base) var(--ease-standard),
+      transform var(--dur-fast) var(--ease-standard);
+  }
+
+  .enquiry__submit:hover {
+    box-shadow: var(--shadow-md);
+    background-image: linear-gradient(90deg, var(--blue-700), var(--navy-900));
+  }
+
+  .enquiry__submit:active {
+    transform: translateY(1px);
+  }
+
+  .enquiry__submit:disabled {
+    cursor: progress;
+    opacity: 0.8;
+  }
+
+  .enquiry__spinner {
+    display: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid color-mix(in srgb, var(--white) 35%, transparent);
+    border-top-color: var(--white);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .enquiry__submit:global(.is-loading) .enquiry__spinner {
+    display: inline-block;
+  }
+
+  .enquiry__submit:global(.is-loading) :global(.icon) {
+    display: none;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .enquiry__privacy {
+    color: var(--text-supporting);
+    font-size: var(--fs-xs);
+  }
+
+  .enquiry__status:empty {
+    display: none;
+  }
+
+  .enquiry__status {
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    border: 1.5px solid transparent;
+    font-size: var(--fs-sm);
+  }
+
+  .enquiry__status:global(.enquiry__status--success) {
+    background: var(--color-success-bg);
+    border-color: var(--color-success);
+    color: var(--color-success);
+  }
+
+  .enquiry__status:global(.enquiry__status--error) {
+    background: var(--color-error-bg);
+    border-color: var(--color-error);
+    color: var(--color-error);
+  }
+
+  .enquiry__status:global(.enquiry__status--info) {
+    background: var(--sky-50);
+    border-color: var(--color-border-strong);
+    color: var(--blue-700);
+  }
+</style>

@@ -1,0 +1,357 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import Button from '../components/Button.astro';
+import Icon from '../components/Icon.astro';
+import SolarScene from '../components/SolarScene.astro';
+import ThermalGallery from '../components/ThermalGallery.astro';
+import InspectionDashboard from '../components/InspectionDashboard.astro';
+import CTASection from '../components/CTASection.astro';
+import { serviceBySlug, serviceEnquiryHref } from '../data/services';
+import { serviceSchema } from '../config/schema';
+import type { IconName } from '../components/icons';
+
+const service = serviceBySlug('ai-drone-inspection')!;
+
+const steps: { title: string; text: string; icon: IconName }[] = [
+  { title: 'Plan', text: 'We review the site layout, access and safety requirements, and plan flight paths that cover every row.', icon: 'compass' },
+  { title: 'Capture', text: 'The drone records thermal and visual imagery in suitable sunlight, so faults show up clearly.', icon: 'camera' },
+  { title: 'Analyse', text: 'Software-assisted analysis flags temperature anomalies, then each one is reviewed and classified.', icon: 'cpu' },
+  { title: 'Locate', text: 'Every finding is tied to a specific block, string and module so technicians can go straight to it.', icon: 'mapPin' },
+  { title: 'Report', text: 'You receive a report with findings ranked by severity and clear recommended actions.', icon: 'report' },
+];
+
+const technology: { title: string; text: string; icon: IconName }[] = [
+  {
+    title: 'Thermal (infrared) imaging',
+    text: 'Faulty cells, diodes and connections usually run hotter than healthy ones. A thermal camera makes those differences visible across the whole array.',
+    icon: 'thermometer',
+  },
+  {
+    title: 'High-resolution visual imaging',
+    text: 'Visual images sit alongside the thermal data to help confirm causes — soiling, physical damage, shading or debris.',
+    icon: 'camera',
+  },
+  {
+    title: 'AI-assisted anomaly detection',
+    text: 'Software screens thousands of modules to flag likely anomalies, so analysts spend their time reviewing real issues rather than searching for them.',
+    icon: 'cpu',
+  },
+  {
+    title: 'Located, actionable results',
+    text: 'Findings are mapped to the plant layout, turning imagery into a work list your maintenance team can act on.',
+    icon: 'target',
+  },
+];
+
+const benefits = [
+  'Surveys large arrays far faster than walking every row',
+  'Finds faults that are invisible to the eye from the ground',
+  'Little or no disruption to plant operation',
+  'Reduces time technicians spend working at height',
+  'Gives a documented baseline to compare future inspections against',
+];
+
+const limitations = [
+  'Needs suitable conditions — strong, steady sunlight and low wind give the clearest thermal results',
+  'Flights depend on site permissions, airspace rules and safe access',
+  'Thermal anomalies show where to look; some causes still need on-site electrical testing to confirm',
+  'Heavy soiling can mask other faults, so cleaning first can improve results',
+];
+---
+
+<SiteLayout
+  title="AI Drone Inspection"
+  description="Drone-based thermal and visual inspection of solar plants in Rajasthan, with software-assisted fault detection, located findings and clear reports."
+  jsonLd={[serviceSchema(service, '/ai-drone-inspection')]}
+>
+  <PageHero eyebrow="AI drone solar inspection" title="See every module from above">
+    <p>
+      Thermal drone surveys reveal hotspots, failed diodes and underperforming strings across your whole plant — quickly,
+      safely and with every finding pinned to a location.
+    </p>
+    <Fragment slot="actions">
+      <Button href={serviceEnquiryHref(service.slug)} variant="light" size="lg" icon="arrowRight">Request an inspection</Button>
+      <Button href="#dashboard" variant="outline-light" size="lg">See a sample report</Button>
+    </Fragment>
+    <div slot="visual" class="drone-hero-visual">
+      <SolarScene />
+    </div>
+  </PageHero>
+
+  <!-- How it works -->
+  <section class="section" aria-labelledby="how-title">
+    <div class="container">
+      <SectionHeading eyebrow="How it works" title="From flight plan to work list in five steps" id="how-title">
+        <p>A drone inspection follows a structured process so results are consistent, comparable and easy to act on.</p>
+      </SectionHeading>
+      <ol role="list" class="steps">
+        {
+          steps.map((s, i) => (
+            <li class="step" data-reveal style={`--reveal-delay: ${i * 50}ms`}>
+              <span class="step__num mono" aria-hidden="true">
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <span class="step__icon">
+                <Icon name={s.icon} size={22} />
+              </span>
+              <h3 class="step__title">
+                <span class="sr-only">Step {i + 1}: </span>
+                {s.title}
+              </h3>
+              <p class="step__text">{s.text}</p>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <!-- Technology -->
+  <section class="section section--dark on-dark" aria-labelledby="tech-title">
+    <div class="container">
+      <SectionHeading eyebrow="The technology" title="Thermal imaging, visual data and software-assisted analysis" id="tech-title">
+        <p>Each layer answers a different question: where is the problem, what does it look like, and what should be done?</p>
+      </SectionHeading>
+      <ul role="list" class="tech-grid">
+        {
+          technology.map((t, i) => (
+            <li class="tech" data-reveal style={`--reveal-delay: ${(i % 2) * 60}ms`}>
+              <span class="tech__icon">
+                <Icon name={t.icon} size={24} />
+              </span>
+              <h3 class="tech__title">{t.title}</h3>
+              <p class="tech__text">{t.text}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <!-- Thermal gallery -->
+  <section class="section" aria-labelledby="gallery-title">
+    <div class="container">
+      <SectionHeading eyebrow="Thermal imaging gallery" title="What faults look like in infrared" id="gallery-title">
+        <p>Common thermal signatures found during solar inspections. Select an image to view it larger with an explanation.</p>
+      </SectionHeading>
+      <ThermalGallery />
+    </div>
+  </section>
+
+  <!-- Dashboard demo -->
+  <section class="section section--tint" id="dashboard" aria-labelledby="dashboard-title">
+    <div class="container">
+      <SectionHeading eyebrow="Sample report" title="How inspection results are presented" id="dashboard-title">
+        <p>
+          An example of the analytics a drone inspection report can include. Switch between plant blocks to compare results.
+        </p>
+      </SectionHeading>
+      <InspectionDashboard />
+    </div>
+  </section>
+
+  <!-- Benefits & limitations -->
+  <section class="section section--alt" aria-labelledby="balance-title">
+    <div class="container">
+      <SectionHeading eyebrow="An honest view" title="Benefits and limitations" id="balance-title">
+        <p>Drone inspection is powerful, but it works best as part of a complete maintenance programme.</p>
+      </SectionHeading>
+      <div class="balance">
+        <div class="balance__col balance__col--pro" data-reveal>
+          <h3><Icon name="checkCircle" size={22} /> Benefits</h3>
+          <ul role="list">
+            {
+              benefits.map((b) => (
+                <li>
+                  <Icon name="check" size={18} />
+                  {b}
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+        <div class="balance__col balance__col--con" data-reveal style="--reveal-delay: 60ms">
+          <h3><Icon name="info" size={22} /> Limitations to know</h3>
+          <ul role="list">
+            {
+              limitations.map((l) => (
+                <li>
+                  <Icon name="chevronRight" size={18} />
+                  {l}
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      </div>
+      <p class="balance__more">
+        Need electrical confirmation of a finding? Pair a drone survey with
+        <a href="/services#performance-testing">performance testing</a> or
+        <a href="/services#solar-fault-detection">fault detection</a>.
+      </p>
+    </div>
+  </section>
+
+  <CTASection
+    eyebrow="Drone inspection"
+    title="Find out what’s holding your plant back"
+    primaryLabel="Request a drone inspection"
+    primaryHref={serviceEnquiryHref(service.slug)}
+  >
+    <p>Tell us about your site’s size and location, and we’ll confirm availability and the best time to fly.</p>
+  </CTASection>
+</SiteLayout>
+
+<style>
+  .drone-hero-visual {
+    aspect-ratio: 5 / 4;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    border: var(--glass-border);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--brand-solar) 60%, transparent), color-mix(in srgb, var(--brand-midnight) 20%, transparent));
+  }
+
+  /* Steps */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+    gap: var(--gutter);
+  }
+
+  .step {
+    position: relative;
+    padding: var(--space-3);
+    background: var(--white);
+    border: var(--border-thin);
+    border-radius: var(--radius-lg);
+  }
+
+  .step__num {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+    color: var(--color-accent-text);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+  }
+
+  .step__icon {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--space-2);
+    border-radius: var(--radius-md);
+    background: var(--gradient-cta);
+    color: var(--white);
+  }
+
+  .step__title {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-1);
+  }
+
+  .step__text {
+    color: var(--text-secondary);
+    font-size: var(--fs-sm);
+  }
+
+  /* Technology */
+  .tech-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: var(--gutter);
+  }
+
+  @media (min-width: 1025px) {
+    .tech-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  .tech {
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    background: var(--glass-bg);
+    border: var(--glass-border);
+  }
+
+  .tech__icon {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--space-2);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--brand-ice) 12%, transparent);
+    color: var(--sky-200);
+  }
+
+  .tech__title {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-1);
+  }
+
+  .tech__text {
+    color: var(--text-on-dark-muted);
+    font-size: var(--fs-sm);
+  }
+
+  /* Benefits & limitations */
+  .balance {
+    display: grid;
+    gap: var(--gutter);
+  }
+
+  .balance__col {
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    border: var(--border-thin);
+    background: var(--color-bg);
+  }
+
+  .balance__col h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+  }
+
+  .balance__col--pro h3 :global(.icon) {
+    color: var(--color-success);
+  }
+
+  .balance__col--con h3 :global(.icon) {
+    color: var(--color-accent-text);
+  }
+
+  .balance__col ul {
+    display: grid;
+    gap: var(--space-1-5);
+  }
+
+  .balance__col li {
+    display: flex;
+    gap: var(--space-1);
+    align-items: flex-start;
+    color: var(--text-secondary);
+  }
+
+  .balance__col li :global(.icon) {
+    margin-top: 4px;
+    color: var(--blue-500);
+  }
+
+  .balance__more {
+    margin-top: var(--space-3);
+    color: var(--text-secondary);
+  }
+
+  @media (min-width: 1025px) {
+    .balance {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>

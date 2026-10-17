@@ -1,0 +1,238 @@
+/*
+ * VK Solar design tokens — the single source for colour, type, spacing and motion.
+ * Components reference semantic tokens (--color-*, --text-*, --surface-*), never raw hex.
+ *
+ * BRAND PALETTE — the five approved colours are the only brand primitives. Every tint and
+ * tone below is derived from them with color-mix(), so changing a --brand-* value restyles
+ * the whole site. (A planned admin "Brand & Appearance" setting will override these; not built yet.)
+ *
+ *   --brand-midnight  #021024  Midnight Navy    dark sections, footer, admin sidebar, body text
+ *   --brand-solar     #052659  Deep Solar Blue  primary buttons, links, active nav, headings
+ *   --brand-steel     #5483B3  Steel Blue       icons, secondary borders, focus rings, highlights
+ *   --brand-soft      #7DA0CA  Soft Blue        decorative borders, supporting panels, text on dark
+ *   --brand-ice       #C1E8FF  Ice Blue         pale backgrounds, selected states, text on dark
+ *
+ * Contrast rules (verified by `npm run contrast`):
+ *   - Steel Blue is 3.98:1 on white → icons, borders, focus and large text only; never white-on-steel body text.
+ *   - Soft Blue (2.71:1) and Ice Blue (1.29:1) on white → decoration/backgrounds only, never text.
+ *   - Deep Solar Blue vs Midnight Navy is 1.30:1 → never rely on them to distinguish meaning.
+ *
+ * Breakpoints (CSS custom properties can't be used inside @media, so these are the
+ * canonical values to copy):
+ *   mobile   0–640px     4 columns, 12px gutters
+ *   tablet   641–1024px  8 columns, 16px gutters    @media (min-width: 641px)
+ *   desktop  1025px+    12 columns, 24px gutters    @media (min-width: 1025px)
+ */
+
+:root {
+  /* ---------- Brand palette (the five approved colours) ---------- */
+  --brand-midnight: #021024;
+  --brand-solar: #052659;
+  --brand-steel: #5483b3;
+  --brand-soft: #7da0ca;
+  --brand-ice: #c1e8ff;
+  --white: #ffffff;
+
+  /* ---------- Derived tints (all from the palette) ---------- */
+  --ice-50: color-mix(in srgb, var(--brand-ice) 12%, var(--white)); /* page background */
+  --ice-100: color-mix(in srgb, var(--brand-ice) 30%, var(--white)); /* tinted panels, selected rows */
+  --ice-200: color-mix(in srgb, var(--brand-ice) 55%, var(--white)); /* hover tint, chips */
+  --soft-300: color-mix(in srgb, var(--brand-soft) 35%, var(--white)); /* hairline borders */
+  --ink-700: color-mix(in srgb, var(--brand-midnight) 75%, var(--white)); /* secondary text */
+  --ink-600: color-mix(in srgb, var(--brand-midnight) 62%, var(--white)); /* supporting text */
+  --on-dark-muted: color-mix(in srgb, var(--brand-ice) 55%, var(--brand-soft)); /* muted text on navy */
+
+  /*
+   * Legacy aliases — still referenced by existing components, so kept for compatibility.
+   * Each resolves to the new palette. Prefer the --brand-* / semantic names in new code.
+   */
+  --navy-900: var(--brand-midnight);
+  --blue-700: var(--brand-solar);
+  --blue-500: var(--brand-steel);
+  --sky-200: var(--brand-ice); /* only valid as text/lines on DARK surfaces */
+  --sky-100: var(--ice-200);
+  --sky-50: var(--ice-100);
+
+  /* Functional status colours (not brand colours; always paired with an icon + text) */
+  --red-700: #b42318;
+  --red-50: #fef3f2;
+  --green-700: #067647;
+  --green-50: #ecfdf3;
+  --amber-800: #93370d;
+  --amber-50: #fffaeb;
+
+  /* ---------- Semantic colour ---------- */
+  --color-bg: var(--ice-50);
+  --color-surface: var(--white);
+  --color-surface-alt: var(--ice-100);
+  --color-border: var(--soft-300);
+  --color-border-strong: var(--brand-soft); /* decorative emphasis */
+  --color-border-control: var(--brand-steel); /* form controls need 3:1 → steel (3.98:1) */
+
+  --text-primary: var(--brand-midnight);
+  --text-secondary: var(--ink-700);
+  --text-supporting: var(--ink-600);
+  --text-on-dark: var(--white);
+  --text-on-dark-muted: var(--on-dark-muted);
+  --text-on-dark-accent: var(--brand-ice);
+
+  --color-interactive: var(--brand-solar);
+  --color-interactive-hover: var(--brand-midnight);
+  --color-accent: var(--brand-steel); /* non-text accent (icons, rules) */
+  --color-accent-text: var(--brand-solar); /* accent that is text */
+
+  --btn-primary-bg: var(--brand-solar);
+  --btn-primary-bg-hover: var(--brand-midnight);
+  --btn-primary-text: var(--white);
+  --btn-secondary-bg: var(--white);
+  --btn-secondary-bg-hover: var(--ice-100);
+  --btn-secondary-border: var(--brand-steel);
+  --btn-secondary-text: var(--brand-solar);
+
+  --color-error: var(--red-700);
+  --color-error-bg: var(--red-50);
+  --color-success: var(--green-700);
+  --color-success-bg: var(--green-50);
+  --color-warning: var(--amber-800);
+  --color-warning-bg: var(--amber-50);
+  --color-warning-border: #fedf89;
+
+  /* Third-party / data colours (not brand) */
+  --whatsapp-green: #128c7e; /* WhatsApp brand, darkened so the white icon meets 3:1 */
+  --thermal-bg: #0d0b33; /* coolest step of the thermal "iron" data scale */
+
+  --focus-ring: var(--brand-steel);
+  --focus-ring-on-dark: var(--brand-ice);
+
+  /* ---------- Gradients (used sparingly) ---------- */
+  --gradient-hero: linear-gradient(135deg, var(--brand-midnight), var(--brand-solar));
+  --gradient-cta: linear-gradient(90deg, var(--brand-solar), color-mix(in srgb, var(--brand-solar) 70%, var(--brand-midnight)));
+  --gradient-dark: linear-gradient(180deg, var(--brand-solar), var(--brand-midnight));
+  --gradient-hero-overlay: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--brand-midnight) 96%, transparent) 0%,
+    color-mix(in srgb, var(--brand-midnight) 88%, transparent) 38%,
+    color-mix(in srgb, var(--brand-midnight) 35%, transparent) 68%,
+    color-mix(in srgb, var(--brand-solar) 10%, transparent) 100%
+  );
+
+  /* ---------- Typography ---------- */
+  --font-heading: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter Variable', 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --fs-xs: 0.8125rem; /* 13px — labels, meta */
+  --fs-sm: 0.875rem; /* 14px */
+  --fs-base: 1rem; /* 16px — body minimum */
+  --fs-md: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem); /* lead text */
+  --fs-lg: clamp(1.125rem, 1.05rem + 0.4vw, 1.375rem);
+  --fs-h4: clamp(1.125rem, 1.05rem + 0.35vw, 1.25rem);
+  --fs-h3: clamp(1.25rem, 1.12rem + 0.6vw, 1.5rem);
+  --fs-h2: clamp(1.75rem, 1.35rem + 1.8vw, 2.75rem);
+  --fs-h1: clamp(2.125rem, 1.5rem + 2.9vw, 3.75rem);
+  --fs-display: clamp(2.375rem, 1.45rem + 4.3vw, 4.75rem);
+  --fs-metric: clamp(2rem, 1.6rem + 1.8vw, 3rem);
+
+  --lh-tight: 1.12;
+  --lh-snug: 1.3;
+  --lh-body: 1.65;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  --tracking-tight: -0.02em;
+  --tracking-eyebrow: 0.12em;
+
+  --measure: 68ch;
+
+  /* ---------- Spacing (8px base) ---------- */
+  --space-0-5: 0.25rem; /* 4 */
+  --space-1: 0.5rem; /* 8 */
+  --space-1-5: 0.75rem; /* 12 */
+  --space-2: 1rem; /* 16 */
+  --space-3: 1.5rem; /* 24 */
+  --space-4: 2rem; /* 32 */
+  --space-5: 2.5rem; /* 40 */
+  --space-6: 3rem; /* 48 */
+  --space-8: 4rem; /* 64 */
+  --space-10: 5rem; /* 80 */
+  --space-12: 6rem; /* 96 */
+  --space-16: 8rem; /* 128 */
+
+  --section-y: clamp(var(--space-8), 5vw + 2rem, var(--space-12));
+  --section-y-sm: clamp(var(--space-6), 3vw + 1.5rem, var(--space-8));
+
+  /* ---------- Layout / grid ---------- */
+  --container-max: 1400px;
+  --container-narrow: 880px;
+  --gutter: 12px;
+  --grid-columns: 4;
+  --page-inline: 16px;
+  --header-height: 72px;
+
+  /* ---------- Radii ---------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* ---------- Borders ---------- */
+  --border-thin: 1px solid var(--color-border);
+  --border-accent: 1px solid var(--color-border-strong);
+
+  /* ---------- Shadows (navy-tinted, restrained) ---------- */
+  --shadow-color: color-mix(in srgb, var(--brand-midnight) 8%, transparent);
+  --shadow-color-strong: color-mix(in srgb, var(--brand-midnight) 14%, transparent);
+  --shadow-xs: 0 1px 2px var(--shadow-color);
+  --shadow-sm: 0 2px 8px var(--shadow-color), 0 1px 2px var(--shadow-color);
+  --shadow-md: 0 8px 24px var(--shadow-color), 0 2px 6px var(--shadow-color);
+  --shadow-lg: 0 18px 48px var(--shadow-color-strong), 0 4px 12px var(--shadow-color);
+  --shadow-header: 0 1px 0 var(--shadow-color), 0 6px 20px var(--shadow-color);
+
+  /* ---------- Glass (used sparingly, always over dark solid backgrounds) ---------- */
+  --glass-bg: color-mix(in srgb, var(--white) 7%, transparent);
+  --glass-border: 1px solid color-mix(in srgb, var(--brand-ice) 22%, transparent);
+  --overlay-scrim: color-mix(in srgb, var(--brand-midnight) 78%, transparent);
+  --glass-blur: blur(10px);
+
+  /* ---------- Motion ---------- */
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 300ms;
+  --dur-reveal: 600ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---------- Z-index scale ---------- */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-sticky: 100;
+  --z-floating: 200;
+  --z-overlay: 900;
+  --z-modal: 1000;
+  --z-skip: 1100;
+
+  /* ---------- Targets ---------- */
+  --target-min: 44px;
+}
+
+@media (min-width: 641px) {
+  :root {
+    --gutter: 16px;
+    --grid-columns: 8;
+    --page-inline: 24px;
+  }
+}
+
+@media (min-width: 1025px) {
+  :root {
+    --gutter: 24px;
+    --grid-columns: 12;
+    --page-inline: 40px;
+    --header-height: 80px;
+  }
+}

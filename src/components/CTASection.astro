@@ -1,0 +1,120 @@
+---
+import Button from './Button.astro';
+import { site, telLink, whatsappLink } from '../config/site';
+
+interface Props {
+  title?: string;
+  eyebrow?: string;
+  primaryLabel?: string;
+  primaryHref?: string;
+}
+
+const {
+  title = 'Find out what your solar plant could be delivering',
+  eyebrow = 'Free inspection',
+  primaryLabel = 'Get Free Inspection',
+  primaryHref = '/contact#enquiry',
+} = Astro.props;
+
+const tel = telLink();
+const wa = whatsappLink();
+---
+
+<section class="cta-band" aria-labelledby="cta-title">
+  <div class="container">
+    <div class="cta-band__panel on-dark" data-reveal>
+      <div class="cta-band__text">
+        <p class="eyebrow">{eyebrow}</p>
+        <h2 id="cta-title">{title}</h2>
+        <div class="cta-band__lead">
+          <slot>
+            <p>
+              Tell us about your site and we’ll arrange an inspection to assess soiling, faults and performance — with clear
+              recommendations and no obligation.
+            </p>
+          </slot>
+        </div>
+      </div>
+      <div class="cta-band__actions">
+        <Button href={primaryHref} variant="light" size="lg" icon="arrowRight">{primaryLabel}</Button>
+        {
+          tel ? (
+            <Button href={tel} variant="outline-light" size="lg" icon="phone" iconPosition="start">
+              Call {site.contact.phoneDisplay ?? site.contact.phone}
+            </Button>
+          ) : wa ? (
+            <Button href={wa} variant="outline-light" size="lg" icon="chat" iconPosition="start" external>
+              WhatsApp us
+            </Button>
+          ) : (
+            <Button href="/services" variant="outline-light" size="lg">
+              Explore services
+            </Button>
+          )
+        }
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .cta-band {
+    padding-block: var(--section-y);
+  }
+
+  .cta-band__panel {
+    position: relative;
+    overflow: hidden;
+    display: grid;
+    gap: var(--space-4);
+    align-items: center;
+    padding: clamp(var(--space-4), 5vw, var(--space-8));
+    border-radius: var(--radius-xl);
+    background: var(--gradient-hero);
+    color: var(--text-on-dark);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .cta-band__panel::before {
+    content: '';
+    position: absolute;
+    right: -120px;
+    top: -160px;
+    width: 420px;
+    height: 420px;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--brand-ice) 18%, transparent), transparent 70%);
+    pointer-events: none;
+  }
+
+  .cta-band__text {
+    position: relative;
+    display: grid;
+    gap: var(--space-1-5);
+    max-width: 640px;
+  }
+
+  .cta-band__lead {
+    color: var(--text-on-dark-muted);
+    font-size: var(--fs-md);
+  }
+
+  .cta-band__actions {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1-5);
+  }
+
+  @media (min-width: 1025px) {
+    .cta-band__panel {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: var(--space-8);
+    }
+
+    .cta-band__actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+</style>

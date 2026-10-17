@@ -1,0 +1,480 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import Button from '../components/Button.astro';
+import Icon from '../components/Icon.astro';
+import ProcessSteps from '../components/ProcessSteps.astro';
+import CTASection from '../components/CTASection.astro';
+import { services, serviceEnquiryHref } from '../data/services';
+import { serviceSchema } from '../config/schema';
+
+const groups = [
+  { label: 'Solar care', description: 'Routine work that keeps output high.' },
+  { label: 'Diagnostics', description: 'Find and explain performance problems.' },
+  { label: 'Monitoring', description: 'Ongoing visibility of plant health.' },
+  { label: 'Facility', description: 'Site services for your premises.' },
+] as const;
+
+const comparison: Record<string, { when: string; output: string }> = {
+  'solar-panel-cleaning': { when: 'Output drops after dust storms or dry spells', output: 'Cleaned array + photo record' },
+  'preventive-maintenance': { when: 'You want a planned annual programme', output: 'Maintenance log + action list' },
+  'ai-drone-inspection': { when: 'Large sites, or you need a full-plant fault map', output: 'Located findings report' },
+  'performance-testing': { when: 'Generation is below expectation', output: 'Measured losses + likely causes' },
+  'solar-fault-detection': { when: 'Alarms, tripping or sudden output loss', output: 'Isolated fault + corrective plan' },
+  'solar-health-monitoring': { when: 'You want regular condition updates', output: 'Periodic health reports' },
+  'ac-service': { when: 'Before summer, or cooling has weakened', output: 'Serviced units + repair notes' },
+  'rooftop-water-tank-cleaning': { when: 'Sediment, odour or algae in stored water', output: 'Cleaned, rinsed tank' },
+};
+---
+
+<SiteLayout
+  title="Services"
+  description="Solar panel cleaning, preventive maintenance, AI drone inspection, performance testing, fault detection, health monitoring, AC service and rooftop water tank cleaning across Rajasthan."
+  jsonLd={services.map((s) => serviceSchema(s, s.slug === 'ai-drone-inspection' ? '/ai-drone-inspection' : `/services#${s.slug}`))}
+>
+  <PageHero eyebrow="Our services" title="Solar care and site services, from one accountable team">
+    <p>
+      From routine panel cleaning to drone-based fault mapping, our services cover the full life of your solar plant — with
+      clear reporting after every visit.
+    </p>
+    <Fragment slot="actions">
+      <Button href="/contact#enquiry" variant="light" size="lg" icon="arrowRight">Get Free Inspection</Button>
+      <Button href="#compare" variant="outline-light" size="lg">Compare services</Button>
+    </Fragment>
+    <nav slot="visual" class="jump" aria-label="Jump to a service">
+      <p class="jump__title">Jump to a service</p>
+      <ul role="list">
+        {
+          services.map((s) => (
+            <li>
+              <a href={`#${s.slug}`}>
+                <Icon name={s.icon} size={18} />
+                <span>{s.title}</span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </PageHero>
+
+  <!-- Service categories -->
+  <section class="section--sm groups-band" aria-label="Service categories">
+    <div class="container">
+      <ul role="list" class="groups">
+        {
+          groups.map((g) => (
+            <li>
+              <span class="groups__label">{g.label}</span>
+              <span class="groups__desc">{g.description}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <!-- Service detail sections -->
+  <div class="service-list">
+    {
+      services.map((s, i) => (
+        <section id={s.slug} class:list={['service', { 'service--alt': i % 2 === 1 }]} aria-labelledby={`${s.slug}-title`}>
+          <div class="container service__inner">
+            <div class="service__main" data-reveal>
+              <div class="service__badge">
+                <span class="service__icon">
+                  <Icon name={s.icon} size={30} />
+                </span>
+                <span class="service__meta">
+                  <span class="mono">{String(i + 1).padStart(2, '0')}</span> · {s.category}
+                </span>
+              </div>
+              <h2 id={`${s.slug}-title`}>{s.title}</h2>
+              <p class="lead">{s.description}</p>
+              <p class="service__best">
+                <strong>Best for:</strong> {s.bestFor}
+              </p>
+              <ul role="list" class="service__benefits" aria-label={`Benefits of ${s.title}`}>
+                {s.benefits.map((b) => (
+                  <li>
+                    <Icon name="check" size={18} />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+              <div class="service__actions">
+                <Button href={serviceEnquiryHref(s.slug)} icon="arrowRight">
+                  Request {s.title.toLowerCase().startsWith('ai') ? 'an inspection' : 'this service'}
+                </Button>
+                {s.slug === 'ai-drone-inspection' && (
+                  <Button href="/ai-drone-inspection" variant="secondary">
+                    How drone inspection works
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div class="service__includes" data-reveal style="--reveal-delay: 80ms">
+              <h3>What’s included</h3>
+              <ol role="list">
+                {s.includes.map((item, n) => (
+                  <li>
+                    <span class="service__step mono" aria-hidden="true">
+                      {n + 1}
+                    </span>
+                    {item}
+                  </li>
+                ))}
+              </ol>
+              <p class="service__note">Exact scope is confirmed after a site assessment.</p>
+            </div>
+          </div>
+        </section>
+      ))
+    }
+  </div>
+
+  <!-- Comparison -->
+  <section id="compare" class="section section--alt" aria-labelledby="compare-title">
+    <div class="container">
+      <SectionHeading eyebrow="Compare" title="Which service do you need?" id="compare-title">
+        <p>Not sure where to start? Match your situation to a service — or request a free inspection and we’ll recommend one.</p>
+      </SectionHeading>
+      <section class="compare-wrap" aria-label="Service comparison table (scrollable)" tabindex="0">
+        <table class="compare">
+          <caption class="sr-only">Comparison of VK Solar services by type, when to choose them and what you receive</caption>
+          <thead>
+            <tr>
+              <th scope="col">Service</th>
+              <th scope="col">Type</th>
+              <th scope="col">Choose it when</th>
+              <th scope="col">You receive</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              services.map((s) => (
+                <tr>
+                  <th scope="row">
+                    <a href={s.slug === 'ai-drone-inspection' ? '/ai-drone-inspection' : `#${s.slug}`}>
+                      <Icon name={s.icon} size={18} />
+                      {s.title}
+                    </a>
+                  </th>
+                  <td>
+                    <span class="tag">{s.category}</span>
+                  </td>
+                  <td>{comparison[s.slug]?.when}</td>
+                  <td>{comparison[s.slug]?.output}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </section>
+
+  <!-- Process -->
+  <section class="section" aria-labelledby="svc-process-title">
+    <div class="container">
+      <SectionHeading eyebrow="How we work" title="The same clear process on every job" id="svc-process-title" />
+      <ProcessSteps />
+    </div>
+  </section>
+
+  <CTASection title="Not sure which service you need?" eyebrow="Free inspection">
+    <p>
+      Book a free inspection and we’ll assess your site, explain what we find and recommend the right combination of services.
+    </p>
+  </CTASection>
+</SiteLayout>
+
+<style>
+  /* Hero jump nav */
+  .jump {
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--brand-midnight) 55%, transparent);
+    border: var(--glass-border);
+  }
+
+  .jump__title {
+    margin-bottom: var(--space-1);
+    color: var(--white);
+    font-family: var(--font-heading);
+    font-weight: var(--fw-semibold);
+  }
+
+  .jump ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+    gap: 2px var(--space-2);
+  }
+
+  .jump a {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: var(--target-min);
+    color: var(--text-on-dark-muted);
+    font-size: var(--fs-sm);
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+  }
+
+  .jump a :global(.icon) {
+    color: var(--sky-200);
+  }
+
+  .jump a:hover {
+    color: var(--white);
+  }
+
+  .jump a:hover span {
+    text-decoration: underline;
+  }
+
+  /* Categories band */
+  .groups-band {
+    background: var(--white);
+    border-bottom: var(--border-thin);
+  }
+
+  .groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: var(--space-2) var(--gutter);
+  }
+
+  .groups li {
+    display: grid;
+    gap: 2px;
+    padding-left: var(--space-2);
+    border-left: 2px solid var(--blue-500);
+  }
+
+  .groups__label {
+    font-family: var(--font-heading);
+    font-weight: var(--fw-semibold);
+  }
+
+  .groups__desc {
+    color: var(--text-secondary);
+    font-size: var(--fs-sm);
+  }
+
+  /* Service sections */
+  .service {
+    padding-block: var(--section-y-sm);
+    border-bottom: var(--border-thin);
+  }
+
+  .service--alt {
+    background: var(--white);
+  }
+
+  .service__inner {
+    display: grid;
+    gap: var(--space-5);
+    align-items: start;
+  }
+
+  .service__main {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .service__badge {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .service__icon {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-lg);
+    background: var(--gradient-hero);
+    color: var(--sky-200);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .service__meta {
+    color: var(--color-accent-text);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .service__best {
+    color: var(--text-secondary);
+  }
+
+  .service__best strong {
+    color: var(--text-primary);
+  }
+
+  .service__benefits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .service__benefits li {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--radius-pill);
+    background: var(--sky-50);
+    border: 1px solid var(--sky-100);
+    color: var(--navy-900);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+  }
+
+  .service__benefits :global(.icon) {
+    color: var(--color-success);
+  }
+
+  .service__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1-5);
+    margin-top: var(--space-1);
+  }
+
+  .service__includes {
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg);
+    border: var(--border-thin);
+  }
+
+  .service--alt .service__includes {
+    background: var(--sky-50);
+    border-color: var(--sky-100);
+  }
+
+  .service__includes h3 {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-2);
+  }
+
+  .service__includes ol {
+    display: grid;
+    gap: var(--space-1-5);
+  }
+
+  .service__includes li {
+    display: flex;
+    gap: var(--space-1-5);
+    align-items: flex-start;
+    color: var(--text-secondary);
+  }
+
+  .service__step {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--white);
+    border: 1.5px solid var(--color-border-strong);
+    color: var(--blue-700);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+  }
+
+  .service__note {
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: var(--border-thin);
+    color: var(--text-supporting);
+    font-size: var(--fs-xs);
+  }
+
+  @media (min-width: 1025px) {
+    .service__inner {
+      grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+      gap: var(--space-10);
+    }
+
+    .service--alt .service__main {
+      order: 2;
+    }
+  }
+
+  /* Comparison table */
+  .compare-wrap {
+    overflow-x: auto;
+    border: var(--border-thin);
+    border-radius: var(--radius-lg);
+    background: var(--white);
+  }
+
+  .compare {
+    width: 100%;
+    min-width: 720px;
+    border-collapse: collapse;
+    font-size: var(--fs-sm);
+  }
+
+  .compare th,
+  .compare td {
+    padding: var(--space-2);
+    text-align: left;
+    vertical-align: top;
+    border-bottom: var(--border-thin);
+  }
+
+  .compare thead th {
+    background: var(--color-bg);
+    color: var(--text-secondary);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .compare tbody tr:last-child > * {
+    border-bottom: 0;
+  }
+
+  .compare tbody tr:hover {
+    background: var(--sky-50);
+  }
+
+  .compare tbody th a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 32px;
+    font-weight: var(--fw-semibold);
+    color: var(--navy-900);
+  }
+
+  .compare tbody th a :global(.icon) {
+    color: var(--blue-500);
+  }
+
+  .compare td {
+    color: var(--text-secondary);
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--sky-50);
+    color: var(--blue-700);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    white-space: nowrap;
+  }
+</style>

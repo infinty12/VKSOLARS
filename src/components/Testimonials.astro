@@ -1,0 +1,76 @@
+---
+// Client-approved testimonials only. Renders nothing until site.testimonials is filled.
+// Shown as a static grid (no auto-rotation) so every quote stays readable and in reach.
+import SectionHeading from './SectionHeading.astro';
+import { site } from '../config/site';
+
+const items = site.testimonials.filter((t) => t.approved);
+---
+
+{
+  items.length > 0 && (
+    <section class="section section--alt" aria-labelledby="testimonials-title">
+      <div class="container">
+        <SectionHeading eyebrow="Client feedback" title="What our clients say" id="testimonials-title" align="center" />
+        <ul role="list" class="testimonials">
+          {items.map((t, i) => (
+            <li class="testimonial" data-reveal style={`--reveal-delay: ${(i % 3) * 60}ms`}>
+              <figure>
+                <blockquote>
+                  <p>“{t.quote}”</p>
+                </blockquote>
+                <figcaption>
+                  <span class="testimonial__name">{t.name}</span>
+                  {(t.role || t.organisation) && (
+                    <span class="testimonial__meta">{[t.role, t.organisation].filter(Boolean).join(', ')}</span>
+                  )}
+                </figcaption>
+              </figure>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )
+}
+
+<style>
+  .testimonials {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+    gap: var(--space-3);
+  }
+
+  .testimonial figure {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--space-3);
+    height: 100%;
+    padding: var(--space-4);
+    background: var(--color-bg);
+    border: var(--border-thin);
+    border-radius: var(--radius-lg);
+  }
+
+  .testimonial blockquote {
+    font-size: var(--fs-md);
+    color: var(--text-primary);
+  }
+
+  .testimonial figcaption {
+    display: grid;
+    gap: 2px;
+    padding-top: var(--space-2);
+    border-top: var(--border-thin);
+  }
+
+  .testimonial__name {
+    font-weight: var(--fw-semibold);
+  }
+
+  .testimonial__meta {
+    color: var(--text-supporting);
+    font-size: var(--fs-sm);
+  }
+</style>

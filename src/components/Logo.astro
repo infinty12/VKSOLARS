@@ -1,0 +1,90 @@
+---
+interface Props {
+  tone?: 'dark' | 'light';
+  class?: string;
+}
+
+const { tone = 'dark', class: className } = Astro.props;
+---
+
+<span class:list={['logo', `logo--${tone}`, className]}>
+  <svg class="logo__mark" viewBox="0 0 40 40" width="40" height="40" aria-hidden="true" focusable="false">
+    <rect width="40" height="40" rx="10" class="logo__bg"></rect>
+    <circle cx="27.5" cy="12" r="4" class="logo__sun"></circle>
+    <path d="M8 30 11.5 18h17L32 30z" class="logo__panel"></path>
+    <path d="M9.8 24h20.4M17.2 18 16 30M22.8 18 24 30" class="logo__grid"></path>
+  </svg>
+  <span class="logo__text">
+    <span class="logo__name">VK Solar</span>
+    <span class="logo__sub">High-Tech Power Solution</span>
+  </span>
+</span>
+
+<style>
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    line-height: 1;
+  }
+
+  .logo__mark {
+    width: 40px;
+    height: 40px;
+  }
+
+  .logo__bg {
+    fill: var(--navy-900);
+  }
+
+  .logo--light .logo__bg {
+    fill: var(--blue-700);
+  }
+
+  .logo__sun {
+    fill: var(--sky-200);
+  }
+
+  .logo__panel {
+    fill: none;
+    stroke: var(--sky-200);
+    stroke-width: 2;
+    stroke-linejoin: round;
+  }
+
+  .logo__grid {
+    fill: none;
+    stroke: var(--sky-200);
+    stroke-width: 1.5;
+  }
+
+  .logo__text {
+    display: grid;
+    gap: 3px;
+  }
+
+  .logo__name {
+    font-family: var(--font-heading);
+    font-weight: var(--fw-bold);
+    font-size: 1.1875rem;
+    letter-spacing: -0.01em;
+    color: var(--navy-900);
+  }
+
+  .logo__sub {
+    font-family: var(--font-body);
+    font-size: 0.6875rem;
+    font-weight: var(--fw-semibold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-supporting);
+  }
+
+  .logo--light .logo__name {
+    color: var(--white);
+  }
+
+  .logo--light .logo__sub {
+    color: var(--text-on-dark-muted);
+  }
+</style>

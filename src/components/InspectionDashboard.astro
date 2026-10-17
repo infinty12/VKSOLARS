@@ -1,0 +1,516 @@
+---
+// Demonstration dashboard for a drone inspection report.
+// Uses ILLUSTRATIVE SAMPLE DATA only (src/data/sampleInspection.ts) — never live telemetry.
+import Icon from './Icon.astro';
+import { sampleBlocks, PERFORMANCE_FLAG_PCT, type Severity } from '../data/sampleInspection';
+
+const fmt = new Intl.NumberFormat('en-IN');
+const severityIcon: Record<Severity, 'alert' | 'info' | 'checkCircle'> = {
+  Critical: 'alert',
+  Moderate: 'info',
+  Minor: 'checkCircle',
+};
+---
+
+<div class="dash" data-dashboard>
+  <div class="dash__notice" role="note">
+    <Icon name="info" size={20} />
+    <p>
+      <strong>Illustrative sample data — not live telemetry.</strong> These figures are invented to show the kind of report an
+      inspection produces. They are not readings from any real plant.
+    </p>
+  </div>
+
+  <div class="dash__toolbar">
+    <p class="dash__toolbar-label" id="dash-block-label">Plant block</p>
+    <div class="dash__tabs" role="tablist" aria-labelledby="dash-block-label">
+      {
+        sampleBlocks.map((block, i) => (
+          <button
+            type="button"
+            role="tab"
+            id={`tab-${block.id}`}
+            aria-controls={`panel-${block.id}`}
+            aria-selected={i === 0 ? 'true' : 'false'}
+            tabindex={i === 0 ? 0 : -1}
+            class="dash__tab"
+          >
+            {block.label}
+          </button>
+        ))
+      }
+    </div>
+  </div>
+
+  {
+    sampleBlocks.map((block, i) => {
+      const totalAnomalies = block.anomaliesByType.reduce((sum, a) => sum + a.count, 0);
+      const maxCount = Math.max(...block.anomaliesByType.map((a) => a.count), 1);
+      const flagged = block.stringPerformance.filter((s) => s.pct < PERFORMANCE_FLAG_PCT).length;
+      return (
+        <div
+          role="tabpanel"
+          id={`panel-${block.id}`}
+          aria-labelledby={`tab-${block.id}`}
+          class="dash__panel"
+          hidden={i !== 0}
+          tabindex="0"
+        >
+          <dl class="dash__kpis">
+            <div class="kpi">
+              <dt>Modules scanned</dt>
+              <dd class="mono">{fmt.format(block.modulesScanned)}</dd>
+            </div>
+            <div class="kpi">
+              <dt>Anomalies flagged</dt>
+              <dd class="mono">{totalAnomalies}</dd>
+            </div>
+            <div class="kpi">
+              <dt>Strings below {PERFORMANCE_FLAG_PCT}%</dt>
+              <dd class="mono">{flagged}</dd>
+            </div>
+            <div class="kpi">
+              <dt>Block capacity</dt>
+              <dd class="mono">
+                {fmt.format(block.capacityKw)}
+                <span class="kpi__unit">kW</span>
+              </dd>
+            </div>
+          </dl>
+
+          <div class="dash__charts">
+            <figure class="chart">
+              <figcaption class="chart__title">Anomalies by type</figcaption>
+              <p class="chart__sub">Count of flagged modules · {block.label}</p>
+              <ul role="list" class="hbars">
+                {block.anomaliesByType.map((a) => (
+                  <li class="hbar">
+                    <span class="hbar__label">{a.type}</span>
+                    <span class="hbar__track">
+                      <span
+                        class="hbar__fill"
+                        style={`--w: ${(a.count / maxCount) * 100}%`}
+                        data-tip={`${a.type}: ${a.count}`}
+                      />
+                    </span>
+                    <span class="hbar__value mono">{a.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </figure>
+
+            <figure class="chart">
+              <figcaption class="chart__title">String performance</figcaption>
+              <p class="chart__sub">Measured output as % of expected · dashed line = {PERFORMANCE_FLAG_PCT}% review threshold</p>
+              <ul role="list" class="hbars hbars--perf" style={`--flag: ${PERFORMANCE_FLAG_PCT}%`}>
+                {block.stringPerformance.map((s) => {
+                  const low = s.pct < PERFORMANCE_FLAG_PCT;
+                  return (
+                    <li class:list={['hbar', { 'hbar--low': low }]}>
+                      <span class="hbar__label mono">{s.string}</span>
+                      <span class="hbar__track">
+                        <span class="hbar__fill" style={`--w: ${s.pct}%`} data-tip={`${s.string}: ${s.pct}% of expected`} />
+                        <span class="hbar__flag" aria-hidden="true" />
+                      </span>
+                      <span class="hbar__value mono">
+                        {s.pct}%
+                        {low && (
+                          <span class="hbar__warn">
+                            <Icon name="alert" size={14} />
+                            <span class="sr-only">below threshold</span>
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </figure>
+          </div>
+
+          <div class="findings">
+            <h3 class="findings__title">Priority findings</h3>
+            <section class="table-wrap" aria-label={`Priority findings table, ${block.label} (scrollable)`} tabindex="0">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Severity</th>
+                    <th scope="col">Finding</th>
+                    <th scope="col">Location</th>
+                    <th scope="col">ΔT</th>
+                    <th scope="col">Recommended action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.findings.map((f) => (
+                    <tr>
+                      <td>
+                        <span class:list={['sev', `sev--${f.severity.toLowerCase()}`]}>
+                          <Icon name={severityIcon[f.severity]} size={14} />
+                          {f.severity}
+                        </span>
+                      </td>
+                      <td>{f.type}</td>
+                      <td>{f.location}</td>
+                      <td class="mono">{f.deltaT > 0 ? `+${f.deltaT.toFixed(1)} °C` : '—'}</td>
+                      <td>{f.action}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          </div>
+        </div>
+      );
+    })
+  }
+</div>
+
+<script>
+  // WAI-ARIA tabs: click, Left/Right/Home/End to move between blocks.
+  document.querySelectorAll<HTMLElement>('[data-dashboard]').forEach((root) => {
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    const select = (tab: HTMLButtonElement, focus = true) => {
+      tabs.forEach((t) => {
+        const on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        const panel = root.querySelector<HTMLElement>(`#${t.getAttribute('aria-controls')}`);
+        if (panel) panel.hidden = !on;
+      });
+      if (focus) tab.focus();
+    };
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => select(tab, false));
+      tab.addEventListener('keydown', (e) => {
+        const keys: Record<string, number> = {
+          ArrowRight: (i + 1) % tabs.length,
+          ArrowLeft: (i - 1 + tabs.length) % tabs.length,
+          Home: 0,
+          End: tabs.length - 1,
+        };
+        if (e.key in keys) {
+          e.preventDefault();
+          select(tabs[keys[e.key]]);
+        }
+      });
+    });
+  });
+</script>
+
+<style>
+  .dash {
+    display: grid;
+    /* minmax(0, …) stops the wide findings table from stretching the whole dashboard. */
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    padding: clamp(var(--space-2), 3vw, var(--space-4));
+    background: var(--white);
+    border: var(--border-thin);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-md);
+  }
+
+  .dash__notice {
+    display: flex;
+    gap: var(--space-1-5);
+    align-items: flex-start;
+    padding: var(--space-1-5) var(--space-2);
+    border-radius: var(--radius-md);
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+    border: 1px solid var(--color-warning-border);
+    font-size: var(--fs-sm);
+  }
+
+  .dash__notice :global(.icon) {
+    margin-top: 2px;
+  }
+
+  .dash__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1-5);
+  }
+
+  .dash__toolbar-label {
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+    color: var(--text-secondary);
+  }
+
+  .dash__tabs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px;
+    background: var(--sky-50);
+    border-radius: var(--radius-md);
+  }
+
+  .dash__tab {
+    min-height: var(--target-min);
+    padding-inline: var(--space-2);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: var(--fw-semibold);
+    font-size: var(--fs-sm);
+    transition:
+      background-color var(--dur-fast) var(--ease-standard),
+      color var(--dur-fast) var(--ease-standard);
+  }
+
+  .dash__tab:hover {
+    color: var(--navy-900);
+  }
+
+  .dash__tab[aria-selected='true'] {
+    background: var(--white);
+    color: var(--navy-900);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .dash__panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    border-radius: var(--radius-md);
+  }
+
+  .dash__panel[hidden] {
+    display: none;
+  }
+
+  /* KPIs */
+  .dash__kpis {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-1-5);
+  }
+
+  .kpi {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px;
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+    border: var(--border-thin);
+  }
+
+  .kpi dt {
+    color: var(--text-supporting);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-medium);
+  }
+
+  .kpi dd {
+    font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+    font-weight: 600;
+    line-height: 1.15;
+    color: var(--navy-900);
+  }
+
+  .kpi__unit {
+    font-size: var(--fs-sm);
+    color: var(--text-supporting);
+    margin-left: 2px;
+  }
+
+  /* Charts */
+  .dash__charts {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .chart {
+    padding: var(--space-2) var(--space-2) var(--space-3);
+    border: var(--border-thin);
+    border-radius: var(--radius-md);
+  }
+
+  .chart__title {
+    font-family: var(--font-heading);
+    font-weight: var(--fw-semibold);
+  }
+
+  .chart__sub {
+    margin-bottom: var(--space-2);
+    color: var(--text-supporting);
+    font-size: var(--fs-xs);
+  }
+
+  .hbars {
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .hbar {
+    display: grid;
+    grid-template-columns: minmax(84px, 9.5rem) 1fr 3.75rem;
+    align-items: center;
+    gap: var(--space-1-5);
+    font-size: var(--fs-sm);
+  }
+
+  .hbars--perf .hbar {
+    grid-template-columns: 3rem 1fr 3.75rem;
+  }
+
+  .hbar__label {
+    color: var(--text-secondary);
+    line-height: 1.3;
+  }
+
+  .hbar__track {
+    position: relative;
+    height: 14px;
+    border-radius: 0 4px 4px 0;
+    background: var(--sky-50);
+  }
+
+  .hbar__fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--w);
+    border-radius: 0 4px 4px 0;
+    background: var(--blue-700);
+    transition: width var(--dur-slow) var(--ease-out);
+  }
+
+  .hbar--low .hbar__fill {
+    background: var(--blue-500);
+    background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--white) 35%, transparent) 0 3px, transparent 3px 7px);
+  }
+
+  .hbar__flag {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    left: var(--flag);
+    border-left: 2px dashed var(--color-warning);
+  }
+
+  .hbar__value {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .hbar__warn {
+    display: inline-flex;
+    color: var(--color-warning);
+  }
+
+  /* Hover tooltip (values are also printed beside each bar for touch and keyboard users). */
+  .hbar__fill::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 100%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--navy-900);
+    color: var(--white);
+    font-family: var(--font-body);
+    font-size: var(--fs-xs);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur-fast) var(--ease-standard);
+    z-index: 2;
+  }
+
+  .hbar:hover .hbar__fill::after {
+    opacity: 1;
+  }
+
+  .hbar:hover .hbar__track {
+    background: var(--sky-100);
+  }
+
+  /* Findings table */
+  .findings__title {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-1-5);
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    border: var(--border-thin);
+    border-radius: var(--radius-md);
+  }
+
+  table {
+    width: 100%;
+    min-width: 640px;
+    border-collapse: collapse;
+    font-size: var(--fs-sm);
+  }
+
+  th,
+  td {
+    padding: var(--space-1-5) var(--space-2);
+    text-align: left;
+    vertical-align: top;
+    border-bottom: var(--border-thin);
+  }
+
+  thead th {
+    background: var(--color-bg);
+    color: var(--text-secondary);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .sev {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    white-space: nowrap;
+  }
+
+  .sev--critical {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+  }
+
+  .sev--moderate {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+  }
+
+  .sev--minor {
+    background: var(--sky-50);
+    color: var(--blue-700);
+  }
+
+  @media (min-width: 641px) {
+    .dash__kpis {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 1025px) {
+    .dash__charts {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>

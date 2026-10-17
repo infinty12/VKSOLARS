@@ -1,0 +1,259 @@
+---
+import Logo from './Logo.astro';
+import Icon from './Icon.astro';
+import { mainNav } from '../config/navigation';
+import { site, socialLinks, telLink, whatsappLink } from '../config/site';
+import { services, serviceHref } from '../data/services';
+
+const year = new Date().getFullYear();
+const tel = telLink();
+const wa = whatsappLink();
+const confirmed = site.serviceAreas.confirmed;
+const socialLabels: Record<string, string> = {
+  linkedin: 'LinkedIn',
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  youtube: 'YouTube',
+};
+---
+
+<footer class="site-footer on-dark">
+  <div class="container">
+    <div class="site-footer__grid">
+      <div class="site-footer__brand">
+        <a href="/" class="site-footer__logo">
+          <Logo tone="light" />
+          <span class="sr-only">, home</span>
+        </a>
+        <p>
+          Solar cleaning, preventive maintenance and AI drone inspection for industrial and commercial solar plants across
+          Rajasthan.
+        </p>
+        <p class="site-footer__tagline">{site.tagline}</p>
+      </div>
+
+      <nav class="site-footer__col" aria-labelledby="footer-company">
+        <h2 id="footer-company" class="site-footer__heading">Company</h2>
+        <ul role="list">
+          {
+            mainNav.map((item) => (
+              <li>
+                <a href={item.href}>{item.label}</a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+
+      <nav class="site-footer__col" aria-labelledby="footer-services">
+        <h2 id="footer-services" class="site-footer__heading">Services</h2>
+        <ul role="list">
+          {
+            services.map((s) => (
+              <li>
+                <a href={serviceHref(s.slug)}>{s.title}</a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+
+      <div class="site-footer__col">
+        <h2 class="site-footer__heading">Service area</h2>
+        {
+          confirmed.length > 0 ? (
+            <ul role="list">
+              {confirmed.slice(0, 6).map((c) => (
+                <li>{c.name}</li>
+              ))}
+            </ul>
+          ) : (
+            <p>Industrial and commercial sites across {site.region}.</p>
+          )
+        }
+        <p><a href="/service-areas">Check availability for your location</a></p>
+
+        <h2 class="site-footer__heading site-footer__heading--spaced">Get in touch</h2>
+        <ul role="list" class="site-footer__contact">
+          {
+            tel && (
+              <li>
+                <Icon name="phone" size={18} />
+                <a href={tel}>{site.contact.phoneDisplay ?? site.contact.phone}</a>
+              </li>
+            )
+          }
+          {
+            wa && (
+              <li>
+                <Icon name="chat" size={18} />
+                <a href={wa} target="_blank" rel="noopener noreferrer">
+                  WhatsApp us<span class="sr-only"> (opens in a new tab)</span>
+                </a>
+              </li>
+            )
+          }
+          {
+            site.contact.email && (
+              <li>
+                <Icon name="mail" size={18} />
+                <a href={`mailto:${site.contact.email}`}>{site.contact.email}</a>
+              </li>
+            )
+          }
+          {
+            site.contact.address && (
+              <li>
+                <Icon name="mapPin" size={18} />
+                <span>{site.contact.address}</span>
+              </li>
+            )
+          }
+          <li>
+            <Icon name="report" size={18} />
+            <a href="/contact#enquiry">Send an enquiry</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="site-footer__bottom">
+      <p>&copy; {year} {site.name}. All rights reserved.</p>
+      {
+        socialLinks.length > 0 && (
+          <ul role="list" class="site-footer__social">
+            {socialLinks.map(({ network, href }) => (
+              <li>
+                <a href={href} target="_blank" rel="noopener noreferrer">
+                  {socialLabels[network] ?? network}
+                  <span class="sr-only"> (opens in a new tab)</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    background: var(--navy-900);
+    color: var(--text-on-dark-muted);
+    padding-block: var(--space-10) var(--space-4);
+    font-size: var(--fs-sm);
+  }
+
+  .site-footer__grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+  }
+
+  .site-footer__brand p {
+    max-width: 38ch;
+    margin-top: var(--space-2);
+    line-height: 1.7;
+  }
+
+  .site-footer__tagline {
+    font-family: var(--font-heading);
+    font-weight: var(--fw-semibold);
+    color: var(--sky-200);
+  }
+
+  .site-footer__logo {
+    display: inline-flex;
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+  }
+
+  .site-footer__heading {
+    margin-bottom: var(--space-1-5);
+    color: var(--white);
+    font-family: var(--font-body);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    letter-spacing: var(--tracking-eyebrow);
+    text-transform: uppercase;
+  }
+
+  .site-footer__heading--spaced {
+    margin-top: var(--space-4);
+  }
+
+  .site-footer__col ul {
+    display: grid;
+    gap: 2px;
+  }
+
+  .site-footer__col p {
+    line-height: 1.7;
+  }
+
+  .site-footer__col p + p {
+    margin-top: var(--space-1);
+  }
+
+  .site-footer a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    color: var(--text-on-dark-muted);
+    text-decoration: none;
+  }
+
+  .site-footer a:hover {
+    color: var(--white);
+    text-decoration: underline;
+  }
+
+  .site-footer__contact li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  /* Larger tap targets on touch devices. */
+  @media (pointer: coarse) {
+    .site-footer a {
+      min-height: var(--target-min);
+    }
+  }
+
+  .site-footer__contact :global(.icon) {
+    color: var(--sky-200);
+  }
+
+  .site-footer__bottom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-top: var(--space-8);
+    padding-top: var(--space-3);
+    border-top: 1px solid color-mix(in srgb, var(--brand-ice) 18%, transparent);
+    font-size: var(--fs-xs);
+  }
+
+  .site-footer__social {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  @media (min-width: 641px) {
+    .site-footer__grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 1025px) {
+    .site-footer__grid {
+      grid-template-columns: 1.4fr 1fr 1.2fr 1.3fr;
+      gap: var(--space-6);
+    }
+  }
+</style>

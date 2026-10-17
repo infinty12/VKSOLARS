@@ -1,0 +1,98 @@
+---
+// Verified company statistics with a count-up on first view.
+// Renders nothing unless site.stats contains verified figures.
+import { site } from '../config/site';
+
+const stats = site.stats;
+const fmt = new Intl.NumberFormat('en-IN');
+---
+
+{
+  stats.length > 0 && (
+    <section class="stats section--sm on-dark" aria-labelledby="stats-title">
+      <div class="container">
+        <h2 id="stats-title" class="sr-only">
+          {site.shortName} in numbers
+        </h2>
+        <dl class="stats__grid">
+          {stats.map((s) => (
+            <div class="stats__item" data-reveal>
+              <dt class="stats__label">{s.label}</dt>
+              <dd class="stats__value mono">
+                <span data-count={s.value}>{fmt.format(s.value)}</span>
+                {s.suffix}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+  )
+}
+
+<script>
+  const counters = document.querySelectorAll<HTMLElement>('[data-count]');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (counters.length && !reduce && 'IntersectionObserver' in window) {
+    const fmt = new Intl.NumberFormat('en-IN');
+    const run = (el: HTMLElement) => {
+      const target = Number(el.dataset.count);
+      const start = performance.now();
+      const duration = 1200;
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - start) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        el.textContent = fmt.format(Math.round(target * eased));
+        if (t < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            run(entry.target as HTMLElement);
+            observer.unobserve(entry.target);
+          }
+        }
+      },
+      { threshold: 0.6 },
+    );
+    counters.forEach((el) => observer.observe(el));
+  }
+</script>
+
+<style>
+  .stats {
+    background: var(--gradient-dark);
+    color: var(--text-on-dark);
+    padding-block: var(--section-y-sm);
+  }
+
+  .stats__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+    gap: var(--space-3);
+  }
+
+  .stats__item {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: var(--space-0-5);
+    padding-left: var(--space-2);
+    border-left: 2px solid var(--blue-500);
+  }
+
+  .stats__value {
+    font-size: var(--fs-metric);
+    font-weight: 600;
+    line-height: 1.1;
+    color: var(--white);
+  }
+
+  .stats__label {
+    color: var(--text-on-dark-muted);
+    font-size: var(--fs-sm);
+  }
+</style>

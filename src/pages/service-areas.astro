@@ -1,0 +1,373 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import RajasthanMap from '../components/RajasthanMap.astro';
+import CTASection from '../components/CTASection.astro';
+import Icon from '../components/Icon.astro';
+import { site } from '../config/site';
+import { services, serviceHref } from '../data/services';
+import type { IconName } from '../components/icons';
+
+const confirmed = site.serviceAreas.confirmed;
+
+const factors: { title: string; text: string; icon: IconName }[] = [
+  { title: 'Site location', text: 'Travel distance and access to your site affect scheduling.', icon: 'mapPin' },
+  { title: 'System size', text: 'Large plants may need multi-day visits or a planned programme.', icon: 'panel' },
+  { title: 'Service type', text: 'Drone flights depend on site permissions and airspace rules.', icon: 'drone' },
+  { title: 'Timing', text: 'Weather and season matter — thermal surveys need strong sunlight.', icon: 'clock' },
+];
+---
+
+<SiteLayout
+  title="Service Areas"
+  description="Where VK Solar provides solar panel cleaning, maintenance and AI drone inspection in Rajasthan, and how to check service availability for your site."
+>
+  <PageHero eyebrow="Service areas" title="Solar services across Rajasthan">
+    <p>
+      We support industrial and commercial solar sites across Rajasthan. Tell us where your site is and we’ll confirm availability
+      and the best way to schedule your service.
+    </p>
+  </PageHero>
+
+  <section class="section" aria-labelledby="coverage-title">
+    <div class="container coverage">
+      <div class="coverage__map" data-reveal>
+        <RajasthanMap />
+      </div>
+
+      <div class="coverage__text">
+        <SectionHeading eyebrow="Coverage" title="How our coverage works" id="coverage-title">
+          <p>
+            Our focus is Rajasthan. Because every site is different, we confirm availability for each enquiry rather than
+            promising fixed coverage areas.
+          </p>
+        </SectionHeading>
+
+        {
+          confirmed.length > 0 ? (
+            <div class="coverage__block">
+              <h3>
+                <Icon name="checkCircle" size={20} /> Confirmed service locations
+              </h3>
+              <ul role="list" class="city-list">
+                {confirmed.map((c) => (
+                  <li>
+                    <span class="city-list__name">{c.name}</span>
+                    {c.district && <span class="city-list__meta">{c.district} district</span>}
+                    {c.note && <span class="city-list__meta">{c.note}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null
+        }
+
+        <div class="coverage__block coverage__block--pending">
+          <h3>
+            <Icon name="info" size={20} />
+            {confirmed.length > 0 ? 'Elsewhere in Rajasthan' : 'Check availability for your site'}
+          </h3>
+          <p>
+            {
+              confirmed.length > 0
+                ? 'For locations not listed above, availability is confirmed on request.'
+                : 'Enter your city or industrial area and we’ll confirm whether we can serve your site, and when.'
+            }
+          </p>
+
+          <!-- Plain GET form: works without JavaScript and pre-fills the contact form. -->
+          <form class="availability" action="/contact#enquiry" method="get">
+            <label for="avail-location">Your site location</label>
+            <div class="availability__row">
+              <input
+                id="avail-location"
+                name="location"
+                type="text"
+                required
+                minlength="2"
+                maxlength="120"
+                autocomplete="address-level2"
+                placeholder="e.g. your city or industrial area"
+              />
+              <button type="submit" class="availability__btn">
+                Check availability <Icon name="arrowRight" size={18} />
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--alt" aria-labelledby="factors-title">
+    <div class="container">
+      <SectionHeading eyebrow="Availability" title="What affects scheduling" id="factors-title" align="center">
+        <p>A few things we consider when confirming a visit to your site.</p>
+      </SectionHeading>
+      <ul role="list" class="factors">
+        {
+          factors.map((f, i) => (
+            <li class="factor" data-reveal style={`--reveal-delay: ${i * 50}ms`}>
+              <span class="factor__icon">
+                <Icon name={f.icon} size={22} />
+              </span>
+              <h3>{f.title}</h3>
+              <p>{f.text}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="area-services-title">
+    <div class="container">
+      <SectionHeading eyebrow="Services" title="Services available for Rajasthan sites" id="area-services-title">
+        <p>Every service can be requested for your location — we’ll confirm what’s possible for your site.</p>
+      </SectionHeading>
+      <ul role="list" class="svc-links">
+        {
+          services.map((s) => (
+            <li>
+              <a href={serviceHref(s.slug)}>
+                <span class="svc-links__icon">
+                  <Icon name={s.icon} size={20} />
+                </span>
+                <span>{s.title}</span>
+                <Icon name="chevronRight" size={18} class="svc-links__chev" />
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <CTASection eyebrow="Availability" title="Ask about service at your location" primaryLabel="Request availability">
+    <p>Share your site location and requirements, and we’ll confirm availability and next steps.</p>
+  </CTASection>
+</SiteLayout>
+
+<style>
+  .coverage {
+    display: grid;
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  .coverage__map {
+    padding: var(--space-3);
+    border-radius: var(--radius-xl);
+    background: var(--white);
+    border: var(--border-thin);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .coverage__text {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .coverage__text :global(.section-heading) {
+    margin-bottom: 0;
+  }
+
+  .coverage__block {
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    background: var(--white);
+    border: var(--border-thin);
+  }
+
+  .coverage__block--pending {
+    background: var(--sky-50);
+    border-color: var(--sky-100);
+  }
+
+  .coverage__block h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-1);
+  }
+
+  .coverage__block h3 :global(.icon) {
+    color: var(--color-accent-text);
+  }
+
+  .coverage__block > p {
+    color: var(--text-secondary);
+  }
+
+  .city-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--space-1);
+    margin-top: var(--space-1-5);
+  }
+
+  .city-list li {
+    display: grid;
+    padding: var(--space-1) var(--space-1-5);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+  }
+
+  .city-list__name {
+    font-weight: var(--fw-semibold);
+  }
+
+  .city-list__meta {
+    color: var(--text-supporting);
+    font-size: var(--fs-xs);
+  }
+
+  .availability {
+    display: grid;
+    gap: 6px;
+    margin-top: var(--space-2);
+  }
+
+  .availability label {
+    font-weight: var(--fw-semibold);
+    font-size: var(--fs-sm);
+  }
+
+  .availability__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .availability input {
+    flex: 1 1 220px;
+    min-height: 48px;
+    padding: 0.75rem 0.875rem;
+    border: 1.5px solid var(--color-border-control);
+    border-radius: var(--radius-md);
+    background: var(--white);
+    font-size: var(--fs-base);
+  }
+
+  .availability input::placeholder {
+    color: var(--text-supporting);
+  }
+
+  .availability input:focus-visible {
+    outline: none;
+    border-color: var(--blue-700);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-steel) 35%, transparent);
+  }
+
+  .availability__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    min-height: 48px;
+    padding-inline: var(--space-3);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--gradient-cta);
+    background-color: var(--blue-700);
+    color: var(--white);
+    font-family: var(--font-heading);
+    font-weight: var(--fw-semibold);
+  }
+
+  .availability__btn:hover {
+    background-image: linear-gradient(90deg, var(--blue-700), var(--navy-900));
+  }
+
+  .factors {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: var(--gutter);
+  }
+
+  .factor {
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg);
+    border: var(--border-thin);
+  }
+
+  .factor__icon {
+    display: inline-grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    margin-bottom: var(--space-2);
+    border-radius: 50%;
+    background: var(--white);
+    border: 1.5px solid var(--color-border-strong);
+    color: var(--blue-700);
+  }
+
+  .factor h3 {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-0-5);
+  }
+
+  .factor p {
+    color: var(--text-secondary);
+    font-size: var(--fs-sm);
+  }
+
+  .svc-links {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+    gap: var(--space-1-5);
+  }
+
+  .svc-links a {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    min-height: 60px;
+    padding: var(--space-1-5) var(--space-2);
+    border-radius: var(--radius-md);
+    background: var(--white);
+    border: var(--border-thin);
+    color: var(--navy-900);
+    font-weight: var(--fw-semibold);
+    text-decoration: none;
+    transition:
+      border-color var(--dur-fast) var(--ease-standard),
+      box-shadow var(--dur-base) var(--ease-standard);
+  }
+
+  .svc-links a:hover {
+    border-color: var(--blue-500);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .svc-links__icon {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-sm);
+    background: var(--sky-50);
+    color: var(--blue-700);
+  }
+
+  .svc-links a :global(.svc-links__chev) {
+    margin-left: auto;
+    color: var(--blue-500);
+  }
+
+  @media (min-width: 1025px) {
+    .coverage {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: var(--space-10);
+    }
+
+    .coverage__map {
+      position: sticky;
+      top: calc(var(--header-height) + var(--space-3));
+    }
+  }
+</style>

@@ -1,0 +1,149 @@
+---
+import Icon from './Icon.astro';
+import { processSteps } from '../data/process';
+
+interface Props {
+  tone?: 'light' | 'dark';
+}
+
+const { tone = 'light' } = Astro.props;
+---
+
+<ol role="list" class:list={['process', `process--${tone}`]}>
+  {
+    processSteps.map((step, i) => (
+      <li class="process__step" data-reveal style={`--reveal-delay: ${i * 60}ms`}>
+        <div class="process__marker">
+          <span class="process__number mono" aria-hidden="true">
+            {String(i + 1).padStart(2, '0')}
+          </span>
+          <span class="process__icon">
+            <Icon name={step.icon} size={22} />
+          </span>
+        </div>
+        <h3 class="process__title">
+          <span class="sr-only">Step {i + 1}: </span>
+          {step.title}
+        </h3>
+        <p class="process__desc">{step.description}</p>
+      </li>
+    ))
+  }
+</ol>
+
+<style>
+  .process {
+    display: grid;
+    gap: var(--space-3);
+    counter-reset: step;
+  }
+
+  .process__step {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: var(--space-2);
+    row-gap: var(--space-0-5);
+    align-items: start;
+  }
+
+  .process__marker {
+    grid-row: span 2;
+    display: grid;
+    justify-items: center;
+    gap: var(--space-1);
+  }
+
+  .process__number {
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--color-accent-text);
+  }
+
+  .process__icon {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--white);
+    color: var(--blue-700);
+    border: 1.5px solid var(--color-border-strong);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .process__title {
+    font-size: var(--fs-h4);
+    padding-top: var(--space-3);
+  }
+
+  .process__desc {
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+  }
+
+  /* Dark variant */
+  .process--dark .process__number {
+    color: var(--sky-200);
+  }
+
+  .process--dark .process__icon {
+    background: color-mix(in srgb, var(--white) 6%, transparent);
+    color: var(--sky-200);
+    border-color: color-mix(in srgb, var(--brand-ice) 35%, transparent);
+    box-shadow: none;
+  }
+
+  .process--dark .process__desc {
+    color: var(--text-on-dark-muted);
+  }
+
+  /* Vertical connector on small screens */
+  .process__step:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 25px;
+    top: 84px;
+    bottom: calc(-1 * var(--space-3) + 4px);
+    width: 2px;
+    background: linear-gradient(var(--color-border-strong), transparent);
+  }
+
+  @media (min-width: 1025px) {
+    .process {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: var(--space-3);
+    }
+
+    .process__step {
+      grid-template-columns: 1fr;
+      row-gap: var(--space-1);
+    }
+
+    .process__marker {
+      grid-row: auto;
+      justify-items: start;
+    }
+
+    .process__number {
+      height: 20px;
+      line-height: 20px;
+    }
+
+    .process__title {
+      padding-top: var(--space-1);
+    }
+
+    /* Horizontal connector between icons (number 20px + gap 8px + half icon 26px) */
+    .process__step:not(:last-child)::before {
+      left: 64px;
+      right: calc(-1 * var(--space-3) + 8px);
+      top: 54px;
+      bottom: auto;
+      width: auto;
+      height: 2px;
+      background: linear-gradient(90deg, var(--color-border-strong), transparent);
+    }
+  }
+</style>

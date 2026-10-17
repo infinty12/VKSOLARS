@@ -1,0 +1,586 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import Button from '../components/Button.astro';
+import Icon from '../components/Icon.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import SolarScene from '../components/SolarScene.astro';
+import ServiceCard from '../components/ServiceCard.astro';
+import ProcessSteps from '../components/ProcessSteps.astro';
+import StatsBand from '../components/StatsBand.astro';
+import Testimonials from '../components/Testimonials.astro';
+import CTASection from '../components/CTASection.astro';
+import { site } from '../config/site';
+import { services } from '../data/services';
+import { benefits } from '../data/process';
+import { organizationSchema } from '../config/schema';
+
+const pillars = [
+  { icon: 'droplets', title: 'Clean', text: 'Remove the dust and residue that block sunlight.' },
+  { icon: 'wrench', title: 'Maintain', text: 'Keep modules, wiring and inverters in good order.' },
+  { icon: 'drone', title: 'Inspect', text: 'Find hidden faults with thermal drone surveys.' },
+  { icon: 'trending', title: 'Optimise', text: 'Test, report and recover lost generation.' },
+] as const;
+
+const inspectionCovers = [
+  { icon: 'droplets', label: 'Soiling and module surface condition' },
+  { icon: 'thermometer', label: 'Thermal hotspots and cell defects' },
+  { icon: 'activity', label: 'String and inverter performance' },
+  { icon: 'shield', label: 'Wiring, connectors and structure' },
+] as const;
+---
+
+<SiteLayout
+  title="Home"
+  description="Solar panel cleaning, preventive maintenance, AI drone inspection and performance testing for industrial and commercial solar plants across Rajasthan. Request a free inspection."
+  jsonLd={[organizationSchema()]}
+>
+  <!-- ===== Hero ===== -->
+  <section class="hero on-dark" aria-labelledby="hero-title">
+    <div class="hero__scene">
+      <SolarScene />
+    </div>
+    <div class="hero__overlay" aria-hidden="true"></div>
+
+    <div class="container hero__inner">
+      <div class="hero__content">
+        <p class="eyebrow">Solar cleaning · Maintenance · Drone inspection</p>
+        <h1 id="hero-title" class="hero__title">{site.headline}</h1>
+        <p class="hero__tagline">{site.tagline}</p>
+        <p class="hero__lead">
+          We keep industrial and commercial solar plants across Rajasthan clean, maintained and performing — combining panel
+          cleaning, preventive maintenance, AI drone inspection and performance testing in one accountable service.
+        </p>
+        <div class="hero__actions">
+          <Button href="/contact#enquiry" variant="light" size="lg" icon="arrowRight">Get Free Inspection</Button>
+          <Button href="/contact" variant="outline-light" size="lg">Contact Us</Button>
+        </div>
+      </div>
+
+      <aside class="hero__card" aria-labelledby="hero-card-title">
+        <p id="hero-card-title" class="hero__card-title">
+          <Icon name="search" size={18} /> What a free inspection covers
+        </p>
+        <ul role="list">
+          {
+            inspectionCovers.map((item) => (
+              <li>
+                <span class="hero__card-icon">
+                  <Icon name={item.icon} size={18} />
+                </span>
+                {item.label}
+              </li>
+            ))
+          }
+        </ul>
+        <a href="/ai-drone-inspection" class="hero__card-link">
+          How drone inspection works <Icon name="arrowRight" size={16} />
+        </a>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===== What we do (pillars) ===== -->
+  <section class="pillars" aria-labelledby="pillars-title">
+    <div class="container">
+      <h2 id="pillars-title" class="sr-only">What we do</h2>
+      <ul role="list" class="pillars__grid">
+        {
+          pillars.map((p, i) => (
+            <li class="pillar" data-reveal style={`--reveal-delay: ${i * 50}ms`}>
+              <span class="pillar__icon">
+                <Icon name={p.icon} size={22} />
+              </span>
+              <div>
+                <h3 class="pillar__title">{p.title}</h3>
+                <p class="pillar__text">{p.text}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Services ===== -->
+  <section class="section" aria-labelledby="services-title">
+    <div class="container">
+      <div class="split-heading">
+        <SectionHeading eyebrow="Our services" title="Everything your solar plant needs, from one team" id="services-title">
+          <p>
+            Eight services covering the full life of your system — from routine cleaning to advanced fault diagnostics — plus
+            site services that keep your premises running.
+          </p>
+        </SectionHeading>
+        <Button href="/services" variant="secondary" icon="arrowRight" class="split-heading__action">View all services</Button>
+      </div>
+      <ul role="list" class="services-grid">
+        {
+          services.map((service, i) => (
+            <li>
+              <ServiceCard service={service} index={i} />
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Benefits ===== -->
+  <section class="section section--alt" aria-labelledby="benefits-title">
+    <div class="container">
+      <SectionHeading eyebrow="Why it matters" title="Protect your output and your investment" id="benefits-title" align="center">
+        <p>
+          Solar plants in Rajasthan face intense sun, heat and dust. Consistent, well-documented care is what keeps them
+          producing year after year.
+        </p>
+      </SectionHeading>
+      <ul role="list" class="benefits-grid">
+        {
+          benefits.map((b, i) => (
+            <li class="benefit" data-reveal style={`--reveal-delay: ${(i % 3) * 60}ms`}>
+              <span class="benefit__icon">
+                <Icon name={b.icon} size={24} />
+              </span>
+              <h3 class="benefit__title">{b.title}</h3>
+              <p class="benefit__text">{b.description}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Process ===== -->
+  <section class="section section--dark on-dark" aria-labelledby="process-title">
+    <div class="container">
+      <SectionHeading eyebrow="How we work" title="A clear five-step process" id="process-title">
+        <p>From the first site visit to measurable improvement, you know exactly what is being done and why.</p>
+      </SectionHeading>
+      <ProcessSteps tone="dark" />
+    </div>
+  </section>
+
+  <StatsBand />
+
+  <!-- ===== Drone teaser ===== -->
+  <section class="section" aria-labelledby="drone-title">
+    <div class="container drone-teaser">
+      <div class="drone-teaser__visual" data-reveal>
+        <div class="thermal-tile" aria-hidden="true">
+          <span class="thermal-tile__spot thermal-tile__spot--a"></span>
+          <span class="thermal-tile__spot thermal-tile__spot--b"></span>
+        </div>
+        <p class="drone-teaser__caption">
+          <span class="illustrative-tag">Illustration</span> Thermal imaging highlights cells running hotter than their neighbours.
+        </p>
+      </div>
+      <div class="drone-teaser__text">
+        <SectionHeading eyebrow="AI drone inspection" title="Find the faults you can’t see from the ground" id="drone-title">
+          <p>
+            Drone-mounted thermal cameras survey large arrays quickly, and software-assisted analysis helps flag hotspots,
+            damaged cells and underperforming strings — each located so technicians can go straight to the problem.
+          </p>
+        </SectionHeading>
+        <ul role="list" class="checklist">
+          <li><Icon name="check" size={20} /> Thermal and visual imaging of every row</li>
+          <li><Icon name="check" size={20} /> Findings mapped to specific modules</li>
+          <li><Icon name="check" size={20} /> Clear report with recommended actions</li>
+        </ul>
+        <div class="drone-teaser__actions">
+          <Button href="/ai-drone-inspection" icon="arrowRight">Explore drone inspection</Button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <Testimonials />
+
+  <CTASection />
+</SiteLayout>
+
+<style>
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    background: var(--gradient-hero);
+    color: var(--text-on-dark);
+  }
+
+  .hero__scene {
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 62%;
+    z-index: -2;
+    opacity: 0.85;
+  }
+
+  .hero__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    /* Strong behind the text (top), lighter where only the opaque card sits (bottom). */
+    background: linear-gradient(180deg, color-mix(in srgb, var(--brand-midnight) 96%, transparent) 0%, color-mix(in srgb, var(--brand-midnight) 90%, transparent) 48%, color-mix(in srgb, var(--brand-midnight) 35%, transparent) 100%);
+  }
+
+  .hero__inner {
+    display: grid;
+    gap: var(--space-6);
+    align-items: center;
+    padding-block: clamp(var(--space-8), 9vw, var(--space-16));
+  }
+
+  .hero__content {
+    display: grid;
+    gap: var(--space-2);
+    max-width: 680px;
+  }
+
+  .hero__title {
+    font-size: var(--fs-display);
+    font-weight: var(--fw-bold);
+    line-height: 1.04;
+    text-transform: uppercase;
+    letter-spacing: -0.015em;
+  }
+
+  .hero__tagline {
+    font-family: var(--font-heading);
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-semibold);
+    color: var(--sky-200);
+  }
+
+  .hero__lead {
+    max-width: 58ch;
+    color: var(--text-on-dark-muted);
+    font-size: var(--fs-md);
+  }
+
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1-5);
+    margin-top: var(--space-1-5);
+  }
+
+  .hero__card {
+    display: grid;
+    gap: var(--space-2);
+    max-width: 420px;
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    /* Opaque enough to keep 4.5:1 text contrast over the brighter illustration. */
+    background: color-mix(in srgb, var(--brand-midnight) 82%, transparent);
+    border: var(--glass-border);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+  }
+
+  .hero__card-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-family: var(--font-heading);
+    font-weight: var(--fw-semibold);
+    color: var(--white);
+  }
+
+  .hero__card ul {
+    display: grid;
+    gap: var(--space-1-5);
+  }
+
+  .hero__card li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    color: var(--text-on-dark-muted);
+    font-size: var(--fs-sm);
+  }
+
+  .hero__card-icon {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--brand-ice) 12%, transparent);
+    color: var(--sky-200);
+  }
+
+  .hero__card-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-0-5);
+    min-height: var(--target-min);
+    color: var(--sky-200);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+    text-decoration: none;
+  }
+
+  .hero__card-link:hover {
+    color: var(--white);
+    text-decoration: underline;
+  }
+
+  @media (min-width: 1025px) {
+    .hero__scene {
+      inset: 0 0 0 30%;
+      height: auto;
+      opacity: 1;
+    }
+
+    .hero__overlay {
+      background: var(--gradient-hero-overlay);
+    }
+
+    .hero__inner {
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+      min-height: min(78vh, 760px);
+    }
+
+    .hero__card {
+      align-self: end;
+      justify-self: end;
+    }
+  }
+
+  /* ---------- Pillars ---------- */
+  .pillars {
+    position: relative;
+    z-index: 1;
+    margin-top: calc(-1 * var(--space-4));
+  }
+
+  .pillars__grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    background: var(--white);
+    border: var(--border-thin);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+  }
+
+  .pillar {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-start;
+    padding: var(--space-3);
+  }
+
+  .pillar + .pillar {
+    border-top: var(--border-thin);
+  }
+
+  .pillar__icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    background: var(--gradient-cta);
+    color: var(--white);
+  }
+
+  .pillar__title {
+    font-size: var(--fs-h4);
+    font-weight: var(--fw-semibold);
+  }
+
+  .pillar__text {
+    color: var(--text-secondary);
+    font-size: var(--fs-sm);
+  }
+
+  @media (min-width: 641px) {
+    .pillars__grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .pillar + .pillar {
+      border-top: 0;
+    }
+
+    .pillar:nth-child(n + 3) {
+      border-top: var(--border-thin);
+    }
+
+    .pillar:nth-child(even) {
+      border-left: var(--border-thin);
+    }
+  }
+
+  @media (min-width: 1025px) {
+    .pillars__grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .pillar:nth-child(n + 3) {
+      border-top: 0;
+    }
+
+    .pillar + .pillar {
+      border-left: var(--border-thin);
+    }
+  }
+
+  /* ---------- Services ---------- */
+  .split-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: clamp(var(--space-4), 3vw, var(--space-6));
+  }
+
+  .split-heading :global(.section-heading) {
+    margin-bottom: 0;
+  }
+
+  .services-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr));
+    gap: var(--gutter);
+  }
+
+  @media (min-width: 1025px) {
+    .services-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  /* ---------- Benefits ---------- */
+  .benefits-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    gap: var(--space-3) var(--gutter);
+  }
+
+  @media (min-width: 1025px) {
+    .benefits-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .benefit {
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg);
+    border: var(--border-thin);
+  }
+
+  .benefit__icon {
+    display: inline-grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--space-2);
+    border-radius: 50%;
+    background: var(--white);
+    border: 1.5px solid var(--color-border-strong);
+    color: var(--blue-700);
+  }
+
+  .benefit__title {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-1);
+  }
+
+  .benefit__text {
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+  }
+
+  /* ---------- Drone teaser ---------- */
+  .drone-teaser {
+    display: grid;
+    gap: var(--space-6);
+    align-items: center;
+  }
+
+  .drone-teaser__visual {
+    display: grid;
+    gap: var(--space-1-5);
+  }
+
+  .thermal-tile {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    background:
+      repeating-linear-gradient(90deg, color-mix(in srgb, var(--brand-midnight) 55%, transparent) 0 2px, transparent 2px 25%),
+      repeating-linear-gradient(0deg, color-mix(in srgb, var(--brand-midnight) 55%, transparent) 0 2px, transparent 2px 16.66%),
+      linear-gradient(135deg, #1a2a6c 0%, #2b4c8c 30%, #4a7fa7 55%, #3a3f8f 80%, #1a2a6c 100%);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .thermal-tile__spot {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(6px);
+  }
+
+  .thermal-tile__spot--a {
+    left: 58%;
+    top: 30%;
+    width: 16%;
+    aspect-ratio: 1;
+    background: radial-gradient(circle, #fff6c2 0%, #f7b500 35%, #e8590c 65%, transparent 72%);
+  }
+
+  .thermal-tile__spot--b {
+    left: 18%;
+    top: 64%;
+    width: 9%;
+    aspect-ratio: 1;
+    background: radial-gradient(circle, #ffe08a 0%, #f08c00 45%, transparent 72%);
+  }
+
+  .drone-teaser__caption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--text-supporting);
+    font-size: var(--fs-sm);
+  }
+
+  .drone-teaser__text :global(.section-heading) {
+    margin-bottom: var(--space-3);
+  }
+
+  .checklist {
+    display: grid;
+    gap: var(--space-1-5);
+  }
+
+  .checklist li {
+    display: flex;
+    gap: var(--space-1-5);
+    align-items: flex-start;
+    color: var(--text-primary);
+    font-weight: var(--fw-medium);
+  }
+
+  .checklist :global(.icon) {
+    margin-top: 2px;
+    color: var(--color-success);
+  }
+
+  .drone-teaser__actions {
+    margin-top: var(--space-4);
+  }
+
+  @media (min-width: 1025px) {
+    .drone-teaser {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: var(--space-10);
+    }
+  }
+</style>

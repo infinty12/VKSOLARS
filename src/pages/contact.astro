@@ -1,0 +1,336 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import ContactForm from '../components/ContactForm.astro';
+import RajasthanMap from '../components/RajasthanMap.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import Button from '../components/Button.astro';
+import Icon from '../components/Icon.astro';
+import { site, telLink, whatsappLink } from '../config/site';
+
+const tel = telLink();
+const wa = whatsappLink();
+const hasDirect = Boolean(tel || wa || site.contact.email || site.contact.address);
+
+const nextSteps = [
+  { title: 'We review your enquiry', text: 'Your details go straight to our team.' },
+  { title: 'We call to arrange a visit', text: 'We confirm your site, access and a convenient time.' },
+  { title: 'Inspection and findings', text: 'We inspect your system and explain what we find.' },
+];
+---
+
+<SiteLayout
+  title="Contact Us"
+  description="Contact VK Solar to request a free solar inspection or a quote for panel cleaning, maintenance or AI drone inspection anywhere in Rajasthan."
+>
+  <PageHero eyebrow="Contact" title="Request a free inspection">
+    <p>
+      Tell us about your solar plant or site and we’ll arrange an inspection. Whether you need cleaning, maintenance, a drone
+      survey or help with a fault, this is the place to start.
+    </p>
+  </PageHero>
+
+  <section id="enquiry" class="section" aria-labelledby="enquiry-title">
+    <div class="container contact-layout">
+      <div class="contact-form-card">
+        <h2 id="enquiry-title" class="contact-form-card__title">Send an enquiry</h2>
+        <p class="contact-form-card__intro">It takes about a minute. There’s no obligation.</p>
+        <ContactForm />
+      </div>
+
+      <aside class="contact-aside" aria-label="Contact information">
+        <div class="aside-card">
+          <h2 class="aside-card__title">Contact details</h2>
+          {
+            hasDirect ? (
+              <ul role="list" class="contact-list">
+                {tel && (
+                  <li>
+                    <span class="contact-list__icon">
+                      <Icon name="phone" size={20} />
+                    </span>
+                    <span>
+                      <span class="contact-list__label">Phone</span>
+                      <a href={tel}>{site.contact.phoneDisplay ?? site.contact.phone}</a>
+                    </span>
+                  </li>
+                )}
+                {wa && (
+                  <li>
+                    <span class="contact-list__icon">
+                      <Icon name="chat" size={20} />
+                    </span>
+                    <span>
+                      <span class="contact-list__label">WhatsApp</span>
+                      <a href={wa} target="_blank" rel="noopener noreferrer">
+                        Message us<span class="sr-only"> (opens in a new tab)</span>
+                      </a>
+                    </span>
+                  </li>
+                )}
+                {site.contact.email && (
+                  <li>
+                    <span class="contact-list__icon">
+                      <Icon name="mail" size={20} />
+                    </span>
+                    <span>
+                      <span class="contact-list__label">Email</span>
+                      <a href={`mailto:${site.contact.email}`}>{site.contact.email}</a>
+                    </span>
+                  </li>
+                )}
+                {site.contact.address && (
+                  <li>
+                    <span class="contact-list__icon">
+                      <Icon name="mapPin" size={20} />
+                    </span>
+                    <span>
+                      <span class="contact-list__label">Office</span>
+                      {site.contact.address}
+                    </span>
+                  </li>
+                )}
+                {site.contact.hours && (
+                  <li>
+                    <span class="contact-list__icon">
+                      <Icon name="clock" size={20} />
+                    </span>
+                    <span>
+                      <span class="contact-list__label">Hours</span>
+                      {site.contact.hours}
+                    </span>
+                  </li>
+                )}
+              </ul>
+            ) : (
+              <p class="aside-card__text">
+                The enquiry form is the quickest way to reach us. Include your phone number and our team will call you back.
+              </p>
+            )
+          }
+        </div>
+
+        <div class="aside-card">
+          <h2 class="aside-card__title">What happens next</h2>
+          <ol role="list" class="next-steps">
+            {
+              nextSteps.map((s, i) => (
+                <li>
+                  <span class="next-steps__num mono" aria-hidden="true">
+                    {i + 1}
+                  </span>
+                  <span>
+                    <strong>{s.title}</strong>
+                    <span class="next-steps__text">{s.text}</span>
+                  </span>
+                </li>
+              ))
+            }
+          </ol>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="section section--alt" aria-labelledby="area-title">
+    <div class="container area-layout">
+      <div>
+        <SectionHeading eyebrow="Service area" title="Serving sites across Rajasthan" id="area-title">
+          <p>
+            We work with industrial and commercial solar plants throughout Rajasthan. Availability depends on your site’s
+            location, size and the service you need, so we confirm it for every enquiry.
+          </p>
+        </SectionHeading>
+        <div class="area-actions">
+          <Button href="/service-areas" variant="secondary" icon="arrowRight">View service areas</Button>
+        </div>
+      </div>
+      <div class="area-map">
+        <RajasthanMap compact />
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--sm" aria-labelledby="explore-title">
+    <div class="container explore">
+      <h2 id="explore-title" class="explore__title">Want to learn more first?</h2>
+      <div class="explore__links">
+        <Button href="/services" variant="secondary">Browse all services</Button>
+        <Button href="/ai-drone-inspection" variant="secondary">How drone inspection works</Button>
+        <Button href="/about" variant="secondary">About VK Solar</Button>
+      </div>
+    </div>
+  </section>
+</SiteLayout>
+
+<style>
+  .contact-layout {
+    display: grid;
+    gap: var(--space-4);
+    align-items: start;
+  }
+
+  .contact-form-card {
+    padding: clamp(var(--space-3), 4vw, var(--space-6));
+    background: var(--white);
+    border: var(--border-thin);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-md);
+  }
+
+  .contact-form-card__title {
+    font-size: var(--fs-h3);
+  }
+
+  .contact-form-card__intro {
+    margin-block: var(--space-1) var(--space-3);
+    color: var(--text-secondary);
+  }
+
+  .contact-aside {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .aside-card {
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    background: var(--gradient-dark);
+    color: var(--text-on-dark);
+  }
+
+  .aside-card + .aside-card {
+    background: var(--white);
+    color: var(--text-primary);
+    border: var(--border-thin);
+  }
+
+  .aside-card__title {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-2);
+  }
+
+  .aside-card__text {
+    color: var(--text-on-dark-muted);
+  }
+
+  .contact-list {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .contact-list li {
+    display: flex;
+    gap: var(--space-1-5);
+    align-items: flex-start;
+    color: var(--text-on-dark-muted);
+  }
+
+  .contact-list > li > span:last-child {
+    display: grid;
+  }
+
+  .contact-list__icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--brand-ice) 14%, transparent);
+    color: var(--sky-200);
+  }
+
+  .contact-list__label {
+    font-size: var(--fs-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .contact-list a {
+    color: var(--white);
+    font-weight: var(--fw-semibold);
+  }
+
+  .next-steps {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .next-steps li {
+    display: flex;
+    gap: var(--space-1-5);
+    align-items: flex-start;
+  }
+
+  .next-steps li > span:last-child {
+    display: grid;
+  }
+
+  .next-steps__num {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--sky-50);
+    border: 1.5px solid var(--color-border-strong);
+    color: var(--blue-700);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+  }
+
+  .next-steps__text {
+    color: var(--text-secondary);
+    font-size: var(--fs-sm);
+  }
+
+  .area-layout {
+    display: grid;
+    gap: var(--space-5);
+    align-items: center;
+  }
+
+  .area-map {
+    padding: var(--space-3);
+    border-radius: var(--radius-xl);
+    background: var(--color-bg);
+    border: var(--border-thin);
+  }
+
+  .explore {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .explore__title {
+    font-size: var(--fs-h3);
+  }
+
+  .explore__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1-5);
+  }
+
+  @media (min-width: 1025px) {
+    .contact-layout {
+      grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+      gap: var(--space-6);
+    }
+
+    .contact-aside {
+      position: sticky;
+      top: calc(var(--header-height) + var(--space-3));
+    }
+
+    .area-layout {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      gap: var(--space-10);
+    }
+  }
+</style>

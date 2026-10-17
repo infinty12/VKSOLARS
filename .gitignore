@@ -1,0 +1,40 @@
+# build output
+dist/
+.astro/
+
+# dependencies
+node_modules/
+
+# test output
+playwright-report/
+test-results/
+
+# environment
+.env
+.env.*
+!.env.example
+
+# runtime data: database, uploads, backups, logs (never commit — may contain enquiries/personal data)
+storage/
+test-storage/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+backups/
+logs/
+*.log
+
+# local Claude Code settings (machine-specific permissions)
+.claude/settings.local.json
+
+# logs
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json

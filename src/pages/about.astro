@@ -1,0 +1,407 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import Icon from '../components/Icon.astro';
+import StatsBand from '../components/StatsBand.astro';
+import CTASection from '../components/CTASection.astro';
+import { site } from '../config/site';
+import { services } from '../data/services';
+import type { IconName } from '../components/icons';
+
+// NOTE: mission, vision and values below are DRAFT copy written from the brief.
+// VK Solar should review and approve them before launch (see README → Content to confirm).
+const values: { title: string; text: string; icon: IconName }[] = [
+  { title: 'Safety first', text: 'Solar plants carry real electrical and working-at-height risks. We plan every job around doing it safely.', icon: 'shield' },
+  { title: 'Accountability', text: 'One team responsible for the result — from the first inspection to the final report.', icon: 'checkCircle' },
+  { title: 'Transparency', text: 'We explain what we find in plain language and document every visit.', icon: 'report' },
+  { title: 'Technology with purpose', text: 'We use drones, thermal imaging and testing where they add real insight, not for show.', icon: 'cpu' },
+];
+
+const reasons: { title: string; text: string; icon: IconName }[] = [
+  {
+    title: 'Complete solar care from one provider',
+    text: `${services.length} services — cleaning, maintenance, diagnostics and monitoring — so you don’t juggle multiple contractors.`,
+    icon: 'layers',
+  },
+  {
+    title: 'Inspection technology that finds hidden faults',
+    text: 'Drone thermal surveys and electrical testing locate problems precisely, so repairs go where they matter.',
+    icon: 'drone',
+  },
+  {
+    title: 'Documented, easy-to-read reporting',
+    text: 'Clear findings and recommended actions after every visit, giving you a history of your plant’s condition.',
+    icon: 'report',
+  },
+  {
+    title: 'Focused on Rajasthan conditions',
+    text: 'Heat, dust and intense sunlight shape how we plan cleaning and maintenance for sites across the state.',
+    icon: 'sun',
+  },
+];
+
+const hasTeam = site.team.length > 0;
+const hasAchievements = site.achievements.length > 0;
+---
+
+<SiteLayout
+  title="About Us"
+  description="About VK Solar High-Tech Power Solution — our mission, values and approach to solar cleaning, maintenance and AI drone inspection for sites across Rajasthan."
+>
+  <PageHero eyebrow="About VK Solar" title="Keeping Rajasthan’s solar plants performing">
+    <p>
+      {site.name} provides solar panel cleaning, preventive maintenance, AI drone inspection and performance testing for
+      industrial and commercial solar plants across Rajasthan.
+    </p>
+  </PageHero>
+
+  <!-- Introduction -->
+  <section class="section" aria-labelledby="intro-title">
+    <div class="container intro">
+      <div>
+        <SectionHeading eyebrow="Who we are" title="A solar care partner for industrial and commercial sites" id="intro-title" />
+      </div>
+      <div class="intro__body">
+        <p class="lead">
+          A solar plant is a long-term investment, and it only pays back fully when it is kept clean, maintained and working as
+          designed. That is what we do.
+        </p>
+        <p>
+          We combine routine services like panel cleaning and preventive maintenance with diagnostic work — drone thermal
+          inspection, performance testing and fault detection — so problems are found early and fixed properly. Alongside solar,
+          we offer AC servicing and rooftop water tank cleaning, so one team can look after more of your site.
+        </p>
+        <p><a href="/services">Explore our services</a></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Mission & vision -->
+  <section class="section section--dark on-dark" aria-labelledby="mv-title">
+    <div class="container">
+      <h2 id="mv-title" class="sr-only">Mission and vision</h2>
+      <div class="mv">
+        <div class="mv__item" data-reveal>
+          <p class="eyebrow">Our mission</p>
+          <p class="mv__statement">
+            To help solar plant owners across Rajasthan get more power and less worry from their systems, through dependable
+            maintenance, precise inspection and honest reporting.
+          </p>
+        </div>
+        <div class="mv__item" data-reveal style="--reveal-delay: 80ms">
+          <p class="eyebrow">Our vision</p>
+          <p class="mv__statement">
+            A future where every solar installation delivers the clean energy it was built to produce — for its owner and for
+            the communities it serves.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Values & approach -->
+  <section class="section" aria-labelledby="values-title">
+    <div class="container">
+      <SectionHeading eyebrow="Our values" title="How we approach every job" id="values-title">
+        <p>The principles behind the way we plan, carry out and report our work.</p>
+      </SectionHeading>
+      <ul role="list" class="values">
+        {
+          values.map((v, i) => (
+            <li class="value" data-reveal style={`--reveal-delay: ${i * 50}ms`}>
+              <span class="value__icon">
+                <Icon name={v.icon} size={24} />
+              </span>
+              <h3>{v.title}</h3>
+              <p>{v.text}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <!-- Team & credentials -->
+  <section class="section section--alt" aria-labelledby="team-title">
+    <div class="container">
+      <SectionHeading eyebrow="Our team" title="The people behind the work" id="team-title" />
+      {
+        hasTeam ? (
+          <ul role="list" class="team">
+            {site.team.map((m) => (
+              <li class="member">
+                {m.photo ? (
+                  <img src={m.photo} alt={`Portrait of ${m.name}`} width="320" height="320" loading="lazy" decoding="async" />
+                ) : (
+                  <span class="member__avatar" aria-hidden="true">
+                    {m.name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .slice(0, 2)}
+                  </span>
+                )}
+                <h3>{m.name}</h3>
+                <p class="member__role">{m.role}</p>
+                {m.bio && <p class="member__bio">{m.bio}</p>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div class="placeholder-note" data-placeholder="team">
+            <Icon name="users" size={22} />
+            <p>
+              <strong>Team profiles coming soon.</strong> We’re preparing introductions to the people who carry out and manage
+              our work.
+            </p>
+          </div>
+        )
+      }
+      {
+        hasAchievements && (
+          <div class="achievements">
+            <h3>Credentials and achievements</h3>
+            <ul role="list">
+              {site.achievements.map((a) => (
+                <li>
+                  <Icon name="checkCircle" size={18} />
+                  {a}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      }
+    </div>
+  </section>
+
+  <StatsBand />
+
+  <!-- Why choose -->
+  <section class="section" aria-labelledby="why-title">
+    <div class="container">
+      <SectionHeading eyebrow="Why choose VK Solar" title="What makes us different" id="why-title" align="center" />
+      <ul role="list" class="reasons">
+        {
+          reasons.map((r, i) => (
+            <li class="reason" data-reveal style={`--reveal-delay: ${(i % 2) * 60}ms`}>
+              <span class="reason__icon">
+                <Icon name={r.icon} size={24} />
+              </span>
+              <div>
+                <h3>{r.title}</h3>
+                <p>{r.text}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <CTASection title="Let’s talk about your solar plant" eyebrow="Get in touch" />
+</SiteLayout>
+
+<style>
+  .intro {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .intro :global(.section-heading) {
+    margin-bottom: 0;
+  }
+
+  .intro__body {
+    display: grid;
+    gap: var(--space-2);
+    color: var(--text-secondary);
+    max-width: var(--measure);
+  }
+
+  .intro__body a {
+    font-weight: var(--fw-semibold);
+  }
+
+  .mv {
+    display: grid;
+    gap: var(--space-6);
+  }
+
+  .mv__item {
+    display: grid;
+    gap: var(--space-1-5);
+    padding-left: var(--space-3);
+    border-left: 2px solid var(--blue-500);
+  }
+
+  .mv__statement {
+    font-family: var(--font-heading);
+    font-size: clamp(1.25rem, 1.05rem + 0.9vw, 1.75rem);
+    font-weight: var(--fw-medium);
+    line-height: 1.4;
+    color: var(--white);
+  }
+
+  .values {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: var(--gutter);
+  }
+
+  .value {
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    background: var(--white);
+    border: var(--border-thin);
+  }
+
+  .value__icon {
+    display: inline-grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--space-2);
+    border-radius: var(--radius-md);
+    background: var(--gradient-cta);
+    color: var(--white);
+  }
+
+  .value h3 {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-1);
+  }
+
+  .value p {
+    color: var(--text-secondary);
+    font-size: var(--fs-sm);
+  }
+
+  .team {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+    gap: var(--space-3);
+  }
+
+  .member img,
+  .member__avatar {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-1-5);
+  }
+
+  .member__avatar {
+    display: grid;
+    place-items: center;
+    background: var(--gradient-hero);
+    color: var(--sky-200);
+    font-family: var(--font-heading);
+    font-size: 2.5rem;
+    font-weight: 600;
+  }
+
+  .member h3 {
+    font-size: var(--fs-h4);
+  }
+
+  .member__role {
+    color: var(--color-accent-text);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+  }
+
+  .member__bio {
+    margin-top: var(--space-1);
+    color: var(--text-secondary);
+    font-size: var(--fs-sm);
+  }
+
+  .placeholder-note :global(.icon) {
+    margin-top: 2px;
+    color: var(--blue-500);
+  }
+
+  .achievements {
+    margin-top: var(--space-5);
+  }
+
+  .achievements h3 {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-1-5);
+  }
+
+  .achievements ul {
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .achievements li {
+    display: flex;
+    gap: var(--space-1);
+    align-items: center;
+  }
+
+  .achievements :global(.icon) {
+    color: var(--color-success);
+  }
+
+  .reasons {
+    display: grid;
+    gap: var(--gutter);
+  }
+
+  .reason {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-start;
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    background: var(--white);
+    border: var(--border-thin);
+  }
+
+  .reason__icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--sky-50);
+    border: 1.5px solid var(--color-border-strong);
+    color: var(--blue-700);
+  }
+
+  .reason h3 {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-0-5);
+  }
+
+  .reason p {
+    color: var(--text-secondary);
+    font-size: var(--fs-sm);
+  }
+
+  @media (min-width: 1025px) {
+    .intro {
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: var(--space-10);
+    }
+
+    .mv {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-10);
+    }
+
+    .values {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .reasons {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>

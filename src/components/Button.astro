@@ -1,0 +1,180 @@
+---
+import Icon from './Icon.astro';
+import type { IconName } from './icons';
+
+interface Props {
+  /** When set, renders a link; otherwise a <button>. */
+  href?: string;
+  variant?: 'primary' | 'secondary' | 'light' | 'outline-light' | 'text';
+  size?: 'md' | 'lg';
+  type?: 'button' | 'submit';
+  icon?: IconName;
+  iconPosition?: 'start' | 'end';
+  class?: string;
+  /** Open external links in a new tab with safe rel attributes. */
+  external?: boolean;
+  [key: string]: unknown;
+}
+
+const {
+  href,
+  variant = 'primary',
+  size = 'md',
+  type = 'button',
+  icon,
+  iconPosition = 'end',
+  class: className,
+  external = false,
+  ...rest
+} = Astro.props;
+
+const classes = ['btn', `btn--${variant}`, `btn--${size}`, className];
+const Tag = href ? 'a' : 'button';
+const linkAttrs = href
+  ? { href, ...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {}) }
+  : { type };
+---
+
+<Tag class:list={classes} {...linkAttrs} {...rest}>
+  {icon && iconPosition === 'start' && <Icon name={icon} size={20} />}
+  <span class="btn__label"><slot /></span>
+  {icon && iconPosition === 'end' && <Icon name={icon} size={20} class="btn__icon-end" />}
+  {external && <span class="sr-only"> (opens in a new tab)</span>}
+</Tag>
+
+<style>
+  .btn {
+    --btn-pad-x: var(--space-3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    min-height: var(--target-min);
+    padding: 0.625rem var(--btn-pad-x);
+    border: 1.5px solid transparent;
+    border-radius: var(--radius-md);
+    font-family: var(--font-heading);
+    font-size: var(--fs-base);
+    font-weight: var(--fw-semibold);
+    line-height: 1.2;
+    letter-spacing: 0.005em;
+    text-decoration: none;
+    text-align: center;
+    white-space: nowrap;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition:
+      background-color var(--dur-base) var(--ease-standard),
+      color var(--dur-base) var(--ease-standard),
+      border-color var(--dur-base) var(--ease-standard),
+      box-shadow var(--dur-base) var(--ease-standard),
+      transform var(--dur-fast) var(--ease-standard);
+  }
+
+  .btn--lg {
+    --btn-pad-x: var(--space-4);
+    min-height: 52px;
+    font-size: var(--fs-md);
+  }
+
+  .btn:active {
+    transform: translateY(1px);
+  }
+
+  .btn[disabled],
+  .btn[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn :global(.btn__icon-end) {
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+
+  .btn:hover :global(.btn__icon-end) {
+    transform: translateX(3px);
+  }
+
+  /* Primary — CTA gradient, white text (5.77:1 at lightest stop) */
+  .btn--primary {
+    background: var(--gradient-cta);
+    background-color: var(--btn-primary-bg);
+    color: var(--btn-primary-text);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .btn--primary:hover {
+    color: var(--btn-primary-text);
+    background: var(--btn-primary-bg-hover);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Secondary — Steel Blue outline (3:1 boundary) with Deep Solar Blue text (14.7:1) */
+  .btn--secondary {
+    background: var(--btn-secondary-bg);
+    color: var(--btn-secondary-text);
+    border-color: var(--btn-secondary-border);
+  }
+
+  .btn--secondary:hover {
+    color: var(--btn-primary-bg-hover);
+    background: var(--btn-secondary-bg-hover);
+    border-color: var(--btn-secondary-text);
+  }
+
+  /* Light — solid white on dark backgrounds */
+  .btn--light {
+    background: var(--white);
+    color: var(--navy-900);
+  }
+
+  .btn--light:hover {
+    background: var(--sky-100);
+    color: var(--navy-900);
+  }
+
+  /* Outline-light — secondary action on dark backgrounds */
+  .btn--outline-light {
+    background: color-mix(in srgb, var(--white) 4%, transparent);
+    color: var(--white);
+    border-color: color-mix(in srgb, var(--brand-ice) 60%, transparent);
+  }
+
+  .btn--outline-light:hover {
+    background: color-mix(in srgb, var(--white) 12%, transparent);
+    color: var(--white);
+    border-color: var(--sky-200);
+  }
+
+  .btn--outline-light:focus-visible,
+  .btn--light:focus-visible {
+    outline-color: var(--focus-ring-on-dark);
+  }
+
+  /* Text — inline arrow link styled as an action */
+  .btn--text {
+    --btn-pad-x: 0;
+    min-height: var(--target-min);
+    padding-block: 0;
+    background: none;
+    color: var(--blue-700);
+    border: 0;
+    font-size: var(--fs-sm);
+  }
+
+  .btn--text:hover {
+    color: var(--navy-900);
+  }
+
+  .btn--text:hover .btn__label {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  @media (max-width: 380px) {
+    .btn {
+      white-space: normal;
+    }
+  }
+</style>

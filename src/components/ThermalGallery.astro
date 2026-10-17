@@ -1,0 +1,353 @@
+---
+import Icon from './Icon.astro';
+import ThermalImage, { type ThermalVariant } from './ThermalImage.astro';
+
+const items: { variant: ThermalVariant; title: string; text: string }[] = [
+  {
+    variant: 'hotspot',
+    title: 'Single-cell hotspot',
+    text: 'One cell runs much hotter than its neighbours — often caused by debris, cell damage or a manufacturing defect.',
+  },
+  {
+    variant: 'diode',
+    title: 'Bypass diode / substring',
+    text: 'A whole section of the module is warmer, a typical sign that a bypass diode is conducting or has failed.',
+  },
+  {
+    variant: 'soiling',
+    title: 'Soiling along the edge',
+    text: 'Dust and dirt collecting at the lower edge raise temperatures in a band across the bottom cells.',
+  },
+  {
+    variant: 'cracked',
+    title: 'Cracked cells',
+    text: 'Irregular warm patches can indicate micro-cracks that reduce output and may worsen over time.',
+  },
+  {
+    variant: 'offline',
+    title: 'Module not producing',
+    text: 'A uniformly warmer module can mean it is disconnected or its string is offline.',
+  },
+  {
+    variant: 'healthy',
+    title: 'Healthy module',
+    text: 'Even temperature across all cells — the pattern every module should show.',
+  },
+];
+---
+
+<div class="gallery" data-gallery>
+  <ul role="list" class="gallery__grid">
+    {
+      items.map((item, i) => (
+        <li class="gallery__item" data-reveal style={`--reveal-delay: ${(i % 3) * 60}ms`}>
+          <button type="button" class="gallery__thumb" data-index={i} aria-haspopup="dialog">
+            <span class="gallery__image">
+              <ThermalImage variant={item.variant} />
+              <span class="gallery__zoom" aria-hidden="true">
+                <Icon name="maximize" size={18} />
+              </span>
+            </span>
+            <span class="gallery__title">{item.title}</span>
+            <span class="sr-only">— view larger</span>
+          </button>
+          <p class="gallery__text">{item.text}</p>
+        </li>
+      ))
+    }
+  </ul>
+
+  <p class="gallery__note">
+    <span class="illustrative-tag">Illustrative</span>
+    Simplified thermal signatures for explanation — not images from a real inspection.
+  </p>
+
+  <dialog class="lightbox" aria-labelledby="lightbox-title" data-lightbox>
+    <div class="lightbox__inner">
+      <div class="lightbox__head">
+        <p class="lightbox__counter mono" data-counter></p>
+        <button type="button" class="lightbox__btn" data-close aria-label="Close">
+          <Icon name="close" />
+        </button>
+      </div>
+      <!-- Single figure; the image and text are copied from the selected thumbnail. -->
+      <figure class="lightbox__figure">
+        <div class="lightbox__image" data-lb-image></div>
+        <figcaption>
+          <span class="illustrative-tag">Illustrative example</span>
+          <!-- Server-rendered with the first item so the heading is never empty; JS swaps in the selected item. -->
+          <h3 id="lightbox-title" data-lb-title>{items[0].title}</h3>
+          <p data-lb-text>{items[0].text}</p>
+          <p class="lightbox__legend">
+            <span class="lightbox__scale" aria-hidden="true"></span>
+            <span>Cooler</span>
+            <span>Hotter</span>
+          </p>
+        </figcaption>
+      </figure>
+      <div class="lightbox__nav">
+        <button type="button" class="lightbox__btn" data-prev aria-label="Previous image">
+          <Icon name="chevronLeft" />
+        </button>
+        <button type="button" class="lightbox__btn" data-next aria-label="Next image">
+          <Icon name="chevronRight" />
+        </button>
+      </div>
+    </div>
+  </dialog>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-gallery]').forEach((root) => {
+    const dialog = root.querySelector<HTMLDialogElement>('[data-lightbox]');
+    if (!dialog) return;
+    const items = Array.from(root.querySelectorAll<HTMLElement>('.gallery__item'));
+    const counter = dialog.querySelector<HTMLElement>('[data-counter]');
+    const imageSlot = dialog.querySelector<HTMLElement>('[data-lb-image]')!;
+    const titleSlot = dialog.querySelector<HTMLElement>('[data-lb-title]')!;
+    const textSlot = dialog.querySelector<HTMLElement>('[data-lb-text]')!;
+    let current = 0;
+    let opener: HTMLElement | null = null;
+
+    const show = (index: number) => {
+      current = (index + items.length) % items.length;
+      const item = items[current];
+      const svg = item.querySelector('svg.thermal');
+      const clone = svg?.cloneNode(true) as SVGElement | undefined;
+      // Drop the clone's <defs>: it keeps using the thumbnail's blur filter by id, so no id is duplicated.
+      clone?.querySelector('defs')?.remove();
+      imageSlot.replaceChildren(...(clone ? [clone] : []));
+      titleSlot.textContent = item.querySelector('.gallery__title')?.textContent ?? '';
+      textSlot.textContent = item.querySelector('.gallery__text')?.textContent ?? '';
+      if (counter) counter.textContent = `${current + 1} / ${items.length}`;
+    };
+
+    root.querySelectorAll<HTMLButtonElement>('[data-index]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        opener = btn;
+        show(Number(btn.dataset.index));
+        dialog.showModal();
+      });
+    });
+
+    dialog.querySelector('[data-close]')?.addEventListener('click', () => dialog.close());
+    dialog.querySelector('[data-prev]')?.addEventListener('click', () => show(current - 1));
+    dialog.querySelector('[data-next]')?.addEventListener('click', () => show(current + 1));
+    dialog.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') show(current + 1);
+      if (e.key === 'ArrowLeft') show(current - 1);
+    });
+    // Click on the backdrop closes the dialog.
+    dialog.addEventListener('click', (e) => {
+      if (e.target === dialog) dialog.close();
+    });
+    dialog.addEventListener('close', () => opener?.focus());
+  });
+</script>
+
+<style>
+  .gallery__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+    gap: var(--space-3) var(--gutter);
+  }
+
+  @media (min-width: 1025px) {
+    .gallery__grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .gallery__thumb {
+    display: grid;
+    gap: var(--space-1-5);
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    border-radius: var(--radius-lg);
+  }
+
+  .gallery__image {
+    position: relative;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 4 / 3;
+    padding: var(--space-2);
+    border-radius: var(--radius-lg);
+    background: var(--thermal-bg);
+    overflow: hidden;
+    transition: box-shadow var(--dur-base) var(--ease-standard);
+  }
+
+  .gallery__image :global(.thermal) {
+    height: 100%;
+    width: auto;
+    transition: transform var(--dur-slow) var(--ease-out);
+  }
+
+  .gallery__thumb:hover .gallery__image {
+    box-shadow: var(--shadow-md);
+  }
+
+  .gallery__thumb:hover .gallery__image :global(.thermal) {
+    transform: scale(1.04);
+  }
+
+  .gallery__zoom {
+    position: absolute;
+    top: var(--space-1);
+    right: var(--space-1);
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--white) 92%, transparent);
+    color: var(--navy-900);
+  }
+
+  .gallery__title {
+    font-family: var(--font-heading);
+    font-weight: var(--fw-semibold);
+    font-size: var(--fs-h4);
+    color: var(--navy-900);
+  }
+
+  .gallery__text {
+    margin-top: var(--space-0-5);
+    color: var(--text-secondary);
+    font-size: var(--fs-sm);
+  }
+
+  .gallery__note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    margin-top: var(--space-4);
+    color: var(--text-supporting);
+    font-size: var(--fs-sm);
+  }
+
+  /* Lightbox */
+  .lightbox {
+    width: min(920px, calc(100% - 2 * var(--space-2)));
+    max-height: calc(100dvh - 2 * var(--space-2));
+    margin: auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-xl);
+    background: var(--white);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .lightbox::backdrop {
+    background: var(--overlay-scrim);
+  }
+
+  .lightbox[open] {
+    animation: lb-in var(--dur-base) var(--ease-out);
+  }
+
+  @keyframes lb-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+
+  .lightbox__inner {
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .lightbox__head,
+  .lightbox__nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .lightbox__nav {
+    justify-content: flex-end;
+    gap: var(--space-1);
+  }
+
+  .lightbox__counter {
+    color: var(--text-supporting);
+    font-size: var(--fs-sm);
+  }
+
+  .lightbox__btn {
+    display: grid;
+    place-items: center;
+    width: var(--target-min);
+    height: var(--target-min);
+    border: var(--border-thin);
+    border-radius: var(--radius-md);
+    background: var(--white);
+    color: var(--navy-900);
+  }
+
+  .lightbox__btn:hover {
+    background: var(--sky-50);
+  }
+
+  .lightbox__figure {
+    display: grid;
+    gap: var(--space-3);
+    align-items: center;
+  }
+
+  .lightbox__image {
+    display: grid;
+    place-items: center;
+    height: min(52vh, 420px);
+    padding: var(--space-2);
+    border-radius: var(--radius-lg);
+    background: var(--thermal-bg);
+  }
+
+  .lightbox__image :global(.thermal) {
+    height: 100%;
+    width: auto;
+  }
+
+  .lightbox__figure h3 {
+    margin-block: var(--space-1);
+  }
+
+  .lightbox__figure p {
+    color: var(--text-secondary);
+  }
+
+  .lightbox__legend {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+    font-size: var(--fs-xs);
+  }
+
+  .lightbox__scale {
+    grid-column: 1 / -1;
+    height: 10px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, rgb(20 16 72), rgb(72 36 140), rgb(176 44 120), rgb(232 90 30), rgb(250 176 20), rgb(255 248 200));
+  }
+
+  .lightbox__legend span:last-child {
+    grid-column: 3;
+  }
+
+  @media (min-width: 768px) {
+    .lightbox__figure {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    }
+  }
+</style>

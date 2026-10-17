@@ -1,0 +1,59 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import Button from '../components/Button.astro';
+import { mainNav } from '../config/navigation';
+---
+
+<SiteLayout title="Page not found" description="The page you were looking for could not be found." noindex>
+  <PageHero eyebrow="Error 404" title="We couldn’t find that page">
+    <p>The link may be out of date or the address may be mistyped. Try one of these pages instead.</p>
+    <Fragment slot="actions">
+      <Button href="/" variant="light" icon="arrowRight">Back to home</Button>
+      <Button href="/contact" variant="outline-light">Contact us</Button>
+    </Fragment>
+  </PageHero>
+  <section class="section section--sm">
+    <div class="container">
+      <h2 class="nf-title">Popular pages</h2>
+      <ul role="list" class="nf-links">
+        {
+          mainNav.map((item) => (
+            <li>
+              <a href={item.href}>{item.label}</a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+</SiteLayout>
+
+<style>
+  .nf-title {
+    font-size: var(--fs-h3);
+    margin-bottom: var(--space-2);
+  }
+
+  .nf-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1-5);
+  }
+
+  .nf-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--target-min);
+    padding-inline: var(--space-2);
+    background: var(--white);
+    border: var(--border-thin);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    font-weight: var(--fw-medium);
+  }
+
+  .nf-links a:hover {
+    border-color: var(--blue-500);
+  }
+</style>

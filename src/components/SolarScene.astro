@@ -1,0 +1,187 @@
+---
+// Illustrated solar array with an inspection drone, drawn in SVG so it is crisp,
+// tiny (no photo download) and on-brand. Replace with a real site photograph via
+// <Image> from astro:assets when approved photography is available.
+interface Props {
+  class?: string;
+  /** Show the drone and scan beam. */
+  drone?: boolean;
+}
+
+const { class: className, drone = true } = Astro.props;
+
+interface Panel {
+  points: string;
+  cells: string;
+  leg: string;
+}
+
+const rows: Panel[][] = [];
+for (let r = 0; r < 5; r++) {
+  const scale = 0.55 + r * 0.19;
+  const w = 74 * scale;
+  const h = 30 * scale;
+  const gap = 7 * scale;
+  const y = 318 + r * 50 + r * r * 9;
+  const offset = (r % 2) * (w / 2) - 40;
+  const count = Math.ceil((860 - offset) / (w + gap)) + 1;
+  const row: Panel[] = [];
+  for (let i = 0; i < count; i++) {
+    const x = offset + i * (w + gap);
+    const inset = w * 0.1;
+    const p = [
+      [x, y + h],
+      [x + w, y + h],
+      [x + w - inset, y],
+      [x + inset, y],
+    ];
+    const cells: string[] = [];
+    // Two horizontal cell rows and three vertical divisions.
+    const midL = [x + inset / 2, y + h / 2];
+    const midR = [x + w - inset / 2, y + h / 2];
+    cells.push(`M${midL[0].toFixed(1)} ${midL[1].toFixed(1)}H${midR[0].toFixed(1)}`);
+    for (let k = 1; k < 4; k++) {
+      const t = k / 4;
+      const bx = x + w * t;
+      const tx = x + inset + (w - 2 * inset) * t;
+      cells.push(`M${bx.toFixed(1)} ${(y + h).toFixed(1)}L${tx.toFixed(1)} ${y.toFixed(1)}`);
+    }
+    row.push({
+      points: p.map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(' '),
+      cells: cells.join(''),
+      leg: `M${(x + w * 0.3).toFixed(1)} ${(y + h).toFixed(1)}v${(8 * scale).toFixed(1)}M${(x + w * 0.7).toFixed(1)} ${(y + h).toFixed(1)}v${(8 * scale).toFixed(1)}`,
+    });
+  }
+  rows.push(row);
+}
+---
+
+<svg
+  class:list={['solar-scene', className]}
+  viewBox="0 0 800 640"
+  preserveAspectRatio="xMidYMax slice"
+  role="img"
+  aria-label="Illustration of a ground-mounted solar array being surveyed by an inspection drone"
+>
+  <!-- All colours come from the brand tokens via the classes below (no hardcoded hex). -->
+  <defs>
+    <radialGradient id="ss-sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" class="ss-stop-white" stop-opacity="0.95"></stop>
+      <stop offset="0.35" class="ss-stop-ice" stop-opacity="0.55"></stop>
+      <stop offset="1" class="ss-stop-ice" stop-opacity="0"></stop>
+    </radialGradient>
+    <linearGradient id="ss-ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" class="ss-stop-solar" stop-opacity="0.35"></stop>
+      <stop offset="1" class="ss-stop-midnight" stop-opacity="0.9"></stop>
+    </linearGradient>
+    <linearGradient id="ss-panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" class="ss-stop-soft"></stop>
+      <stop offset="0.45" class="ss-stop-steel"></stop>
+      <stop offset="1" class="ss-stop-solar"></stop>
+    </linearGradient>
+    <linearGradient id="ss-beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" class="ss-stop-ice" stop-opacity="0.45"></stop>
+      <stop offset="1" class="ss-stop-ice" stop-opacity="0"></stop>
+    </linearGradient>
+  </defs>
+
+  <circle cx="610" cy="150" r="150" fill="url(#ss-sun)"></circle>
+  <circle cx="610" cy="150" r="34" class="ss-sun-core"></circle>
+
+  <path d="M0 300 C 200 280, 600 280, 800 296 V640 H0Z" fill="url(#ss-ground)"></path>
+  <path d="M0 300 C 200 280, 600 280, 800 296" class="ss-horizon"></path>
+
+  {
+    drone && (
+      <g class="solar-scene__beam">
+        <path d="M486 196 L380 418 L610 418 Z" fill="url(#ss-beam)" />
+      </g>
+    )
+  }
+
+  {
+    rows.map((row) => (
+      <g class="ss-row">
+        {row.map((panel) => (
+          <g>
+            <path d={panel.leg} class="ss-leg" />
+            <polygon points={panel.points} fill="url(#ss-panel)" class="ss-panel" />
+            <path d={panel.cells} class="ss-cells" />
+          </g>
+        ))}
+      </g>
+    ))
+  }
+
+  {
+    drone && (
+      <g class="solar-scene__drone" transform="translate(486 186)">
+        <g class="ss-drone-arms">
+          <path d="M-26 -8 -10 -2M26 -8 10 -2M-26 8 -10 2M26 8 10 2" />
+          <path d="M-38 -10h24M14 -10h24M-38 10h24M14 10h24" stroke-opacity="0.75" />
+        </g>
+        <rect x="-11" y="-6" width="22" height="12" rx="4" class="ss-drone-body" />
+        <circle cx="0" cy="9" r="3.4" class="ss-drone-lens" />
+      </g>
+    )
+  }
+</svg>
+
+<!-- Global (unscoped) so Astro doesn't stamp a scoping attribute onto every panel path. -->
+<style is:global>
+  .solar-scene {
+    width: 100%;
+    height: 100%;
+  }
+
+  .ss-stop-white { stop-color: var(--white); }
+  .ss-stop-ice { stop-color: var(--brand-ice); }
+  .ss-stop-soft { stop-color: var(--brand-soft); }
+  .ss-stop-steel { stop-color: var(--brand-steel); }
+  .ss-stop-solar { stop-color: var(--brand-solar); }
+  .ss-stop-midnight { stop-color: var(--brand-midnight); }
+
+  .ss-sun-core { fill: var(--ice-50); opacity: 0.9; }
+  .ss-horizon { fill: none; stroke: var(--brand-ice); stroke-opacity: 0.25; }
+  .ss-leg { stroke: var(--brand-steel); stroke-opacity: 0.6; stroke-width: 1.5; }
+  .ss-panel { stroke: var(--ice-200); stroke-opacity: 0.8; stroke-width: 0.9; }
+  .ss-cells { fill: none; stroke: var(--ice-200); stroke-opacity: 0.45; stroke-width: 0.6; }
+  .ss-drone-arms { fill: none; stroke: var(--ice-50); stroke-width: 2.2; stroke-linecap: round; }
+  .ss-drone-body { fill: var(--ice-50); }
+  .ss-drone-lens { fill: var(--brand-ice); }
+
+  .solar-scene__drone {
+    animation: drone-float 6s ease-in-out infinite;
+  }
+
+  .solar-scene__beam {
+    animation: beam-pulse 6s ease-in-out infinite;
+  }
+
+  @keyframes drone-float {
+    0%,
+    100% {
+      transform: translate(486px, 186px);
+    }
+    50% {
+      transform: translate(486px, 176px);
+    }
+  }
+
+  @keyframes beam-pulse {
+    0%,
+    100% {
+      opacity: 0.9;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .solar-scene__drone,
+    .solar-scene__beam {
+      animation: none;
+    }
+  }
+</style>

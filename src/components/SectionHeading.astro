@@ -1,0 +1,39 @@
+---
+interface Props {
+  eyebrow?: string;
+  title: string;
+  /** Heading level — keep the page outline sequential. */
+  level?: 'h2' | 'h3';
+  align?: 'start' | 'center';
+  id?: string;
+  class?: string;
+}
+
+const { eyebrow, title, level = 'h2', align = 'start', id, class: className } = Astro.props;
+const Heading = level;
+---
+
+<div class:list={['section-heading', `section-heading--${align}`, className]}>
+  {eyebrow && <p class="eyebrow">{eyebrow}</p>}
+  <Heading id={id} class="section-heading__title">{title}</Heading>
+  {Astro.slots.has('default') && <div class="lead section-heading__lead"><slot /></div>}
+</div>
+
+<style>
+  .section-heading {
+    display: grid;
+    gap: var(--space-1-5);
+    max-width: 760px;
+    margin-bottom: clamp(var(--space-4), 3vw, var(--space-6));
+  }
+
+  .section-heading--center {
+    margin-inline: auto;
+    text-align: center;
+    justify-items: center;
+  }
+
+  .section-heading__lead :global(p + p) {
+    margin-top: var(--space-1-5);
+  }
+</style>

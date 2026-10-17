@@ -1,0 +1,74 @@
+---
+// Floating WhatsApp (all sizes) and Call (mobile only) buttons.
+// Renders nothing until a real number is configured in src/config/site.ts.
+import Icon from './Icon.astro';
+import { telLink, whatsappLink } from '../config/site';
+
+const wa = whatsappLink();
+const tel = telLink();
+---
+
+{
+  (wa || tel) && (
+    <div class="floating-actions">
+      {tel && (
+        <a href={tel} class="fab fab--call" aria-label="Call VK Solar">
+          <Icon name="phone" />
+        </a>
+      )}
+      {wa && (
+        <a href={wa} class="fab fab--whatsapp" target="_blank" rel="noopener noreferrer" aria-label="Chat with VK Solar on WhatsApp (opens in a new tab)">
+          <Icon name="chat" />
+        </a>
+      )}
+    </div>
+  )
+}
+
+<style>
+  .floating-actions {
+    position: fixed;
+    right: max(var(--space-2), env(safe-area-inset-right));
+    bottom: max(var(--space-2), env(safe-area-inset-bottom));
+    z-index: var(--z-floating);
+    display: grid;
+    gap: var(--space-1-5);
+  }
+
+  .fab {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    color: var(--white);
+    box-shadow: var(--shadow-lg);
+    transition:
+      transform var(--dur-base) var(--ease-out),
+      box-shadow var(--dur-base) var(--ease-standard);
+  }
+
+  .fab:hover {
+    transform: translateY(-2px);
+    color: var(--white);
+  }
+
+  .fab--call {
+    background: var(--blue-700);
+  }
+
+  /* WhatsApp brand green, darkened so the white icon meets 3:1 non-text contrast. */
+  .fab--whatsapp {
+    background: var(--whatsapp-green);
+  }
+
+  @media (min-width: 1025px) {
+    .fab--call {
+      display: none;
+    }
+  }
+
+  :global(html.menu-open) .floating-actions {
+    display: none;
+  }
+</style>

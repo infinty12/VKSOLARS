@@ -1,0 +1,94 @@
+---
+// Inner-page hero: dark gradient band with heading, intro and actions.
+// Pass a visual via the "visual" slot (shown beside the text on desktop).
+interface Props {
+  eyebrow: string;
+  title: string;
+  id?: string;
+}
+
+const { eyebrow, title, id = 'page-title' } = Astro.props;
+const hasVisual = Astro.slots.has('visual');
+---
+
+<section class:list={['page-hero', 'on-dark', { 'page-hero--split': hasVisual }]} aria-labelledby={id}>
+  <div class="page-hero__pattern" aria-hidden="true"></div>
+  <div class="container page-hero__inner">
+    <div class="page-hero__text">
+      <p class="eyebrow">{eyebrow}</p>
+      <h1 id={id}>{title}</h1>
+      <div class="lead page-hero__lead"><slot /></div>
+      {
+        Astro.slots.has('actions') && (
+          <div class="page-hero__actions">
+            <slot name="actions" />
+          </div>
+        )
+      }
+    </div>
+    {
+      hasVisual && (
+        <div class="page-hero__visual">
+          <slot name="visual" />
+        </div>
+      )
+    }
+  </div>
+</section>
+
+<style>
+  .page-hero {
+    position: relative;
+    overflow: hidden;
+    background: var(--gradient-hero);
+    color: var(--text-on-dark);
+    padding-block: clamp(var(--space-8), 7vw, var(--space-12));
+  }
+
+  /* Faint technical grid — evokes panel arrays without competing with text. */
+  .page-hero__pattern {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--brand-ice) 6%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--brand-ice) 6%, transparent) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 80% 90% at 85% 20%, #000 10%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 90% at 85% 20%, #000 10%, transparent 75%);
+  }
+
+  .page-hero__inner {
+    position: relative;
+    display: grid;
+    gap: var(--space-6);
+    align-items: center;
+  }
+
+  .page-hero__text {
+    display: grid;
+    gap: var(--space-2);
+    max-width: 760px;
+  }
+
+  .page-hero__lead {
+    font-size: var(--fs-lg);
+  }
+
+  .page-hero__lead :global(p + p) {
+    margin-top: var(--space-1-5);
+  }
+
+  .page-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1-5);
+    margin-top: var(--space-2);
+  }
+
+  @media (min-width: 1025px) {
+    .page-hero--split .page-hero__inner {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      gap: var(--space-8);
+    }
+  }
+</style>
