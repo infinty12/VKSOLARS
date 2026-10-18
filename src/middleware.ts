@@ -16,6 +16,7 @@ import { readSession } from './lib/server/auth.ts';
 import { safeEqual } from './lib/server/secret.ts';
 import { ensureOutboxWorker, kickOutbox } from './lib/server/notifications.ts';
 import { MEDIA } from './lib/server/media.ts';
+import { publicBusiness } from './lib/server/site-content.ts';
 
 /** Largest admin form post other than an image upload. */
 const ADMIN_MAX_BODY_BYTES = 256 * 1024;
@@ -45,8 +46,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
+  // Public pages show only the PUBLISHED business details (built-in defaults if none or on error).
+  // The admin preview page replaces this with the draft for its own response only.
+  context.locals.business = publicBusiness();
+
   const path = context.url.pathname;
   if (!isAdminPath(path)) return next();
+  // No such route: serve the public 404 page (status 404, no admin content), exactly as when the
+  // 404 page was pre-rendered and unknown admin URLs never reached this middleware.
+  if (context.routePattern === '/404') return next();
 
   // 1. Local-only access.
   let client = '';

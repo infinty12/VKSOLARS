@@ -263,6 +263,33 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_media_usages_media ON media_usages(media_id);
     `,
   },
+  {
+    id: 7,
+    name: 'editable content: revisions with draft and published pointers',
+    // Every saved draft is a new, immutable revision (validated plain text as JSON). content_state
+    // points at the current draft (if any) and the published revision, so public pages can only
+    // ever read the published one.
+    sql: `
+      CREATE TABLE content_revisions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scope TEXT NOT NULL CHECK (scope IN ('business')),
+        data TEXT NOT NULL CHECK (json_valid(data)),
+        created_by INTEGER REFERENCES admin_users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        restored_from INTEGER REFERENCES content_revisions(id) ON DELETE SET NULL,
+        published_at TEXT,
+        published_by INTEGER REFERENCES admin_users(id) ON DELETE SET NULL
+      );
+      CREATE INDEX idx_content_revisions_scope ON content_revisions(scope, id);
+
+      CREATE TABLE content_state (
+        scope TEXT PRIMARY KEY CHECK (scope IN ('business')),
+        draft_revision_id INTEGER REFERENCES content_revisions(id),
+        published_revision_id INTEGER REFERENCES content_revisions(id),
+        updated_at TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].id;

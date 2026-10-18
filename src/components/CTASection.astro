@@ -1,6 +1,6 @@
 ---
 import Button from './Button.astro';
-import { site, telLink, whatsappLink } from '../config/site';
+import { businessOf, phoneLabel, telLink, whatsappLink } from '../config/site';
 
 interface Props {
   title?: string;
@@ -16,8 +16,9 @@ const {
   primaryHref = '/contact#enquiry',
 } = Astro.props;
 
-const tel = telLink();
-const wa = whatsappLink();
+const business = businessOf(Astro.locals);
+const tel = telLink(business);
+const wa = whatsappLink(undefined, business);
 ---
 
 <section class="cta-band" aria-labelledby="cta-title">
@@ -40,7 +41,7 @@ const wa = whatsappLink();
         {
           tel ? (
             <Button href={tel} variant="outline-light" size="lg" icon="phone" iconPosition="start">
-              Call {site.contact.phoneDisplay ?? site.contact.phone}
+              Call {phoneLabel(business)}
             </Button>
           ) : wa ? (
             <Button href={wa} variant="outline-light" size="lg" icon="chat" iconPosition="start" external>

@@ -1,6 +1,5 @@
 ---
-// Static content page: pre-rendered at build time (no database access).
-export const prerender = true;
+// Server-rendered so the header and footer show the published business details (Admin → Business details).
 import SiteLayout from '../layouts/SiteLayout.astro';
 import Button from '../components/Button.astro';
 import Icon from '../components/Icon.astro';
@@ -11,7 +10,7 @@ import ProcessSteps from '../components/ProcessSteps.astro';
 import StatsBand from '../components/StatsBand.astro';
 import Testimonials from '../components/Testimonials.astro';
 import CTASection from '../components/CTASection.astro';
-import { site } from '../config/site';
+import { site, businessOf } from '../config/site';
 import { services } from '../data/services';
 import { benefits } from '../data/process';
 import { organizationSchema } from '../config/schema';
@@ -34,7 +33,7 @@ const inspectionCovers = [
 <SiteLayout
   title="Home"
   description="Solar panel cleaning, preventive maintenance, AI drone inspection and performance testing for industrial and commercial solar plants across Rajasthan. Request a free inspection."
-  jsonLd={[organizationSchema()]}
+  jsonLd={[organizationSchema(businessOf(Astro.locals))]}
 >
   <!-- ===== Hero ===== -->
   <section class="hero on-dark" aria-labelledby="hero-title">

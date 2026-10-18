@@ -6,6 +6,10 @@ import { expect, type Page } from '@playwright/test';
 export const OPEN_BASE = 'http://127.0.0.1:4395';
 export const OPEN_STORAGE = 'test-storage-open';
 
+/** The "content" test server, used only by the business-details editor tests. */
+export const CONTENT_BASE = 'http://127.0.0.1:4393';
+export const CONTENT_STORAGE = 'test-storage-content';
+
 /** Credentials of the disposable test admin created by scripts/test-server.mjs. */
 export function testAdmin(storage = 'test-storage'): { username: string; password: string } {
   return JSON.parse(readFileSync(resolve(storage, 'test-admin.json'), 'utf8'));

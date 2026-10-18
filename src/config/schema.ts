@@ -3,7 +3,7 @@
  * Fields that are not yet confirmed (address, phone, URL, reviews) are omitted rather than guessed.
  * No ratings or reviews are ever emitted.
  */
-import { site, socialLinks } from './site';
+import { site, defaultBusiness, socialLinksOf, type BusinessDetails } from './site';
 import type { Service } from '../data/services';
 
 type Json = Record<string, unknown>;
@@ -14,8 +14,8 @@ function compact(obj: Json): Json {
 
 const areaServed = { '@type': 'State', name: 'Rajasthan', containedInPlace: { '@type': 'Country', name: 'India' } };
 
-export function organizationSchema(): Json {
-  const c = site.contact;
+export function organizationSchema(business: BusinessDetails = defaultBusiness): Json {
+  const c = business.contact;
   // LocalBusiness needs a real address; until one is confirmed, publish a plain Organization.
   const type = c.address ? 'LocalBusiness' : 'Organization';
   return compact({
@@ -28,9 +28,9 @@ export function organizationSchema(): Json {
     telephone: c.phone,
     email: c.email,
     address: c.address ?? undefined,
-    foundingDate: site.founded ? String(site.founded) : undefined,
+    foundingDate: business.founded ? String(business.founded) : undefined,
     areaServed,
-    sameAs: socialLinks.map((s) => s.href),
+    sameAs: socialLinksOf(business).map((s) => s.href),
   });
 }
 

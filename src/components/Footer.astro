@@ -2,12 +2,14 @@
 import Logo from './Logo.astro';
 import Icon from './Icon.astro';
 import { mainNav } from '../config/navigation';
-import { site, socialLinks, telLink, whatsappLink } from '../config/site';
+import { site, businessOf, phoneLabel, socialLinksOf, telLink, whatsappLink } from '../config/site';
 import { services, serviceHref } from '../data/services';
 
 const year = new Date().getFullYear();
-const tel = telLink();
-const wa = whatsappLink();
+const business = businessOf(Astro.locals);
+const tel = telLink(business);
+const wa = whatsappLink(undefined, business);
+const socialLinks = socialLinksOf(business);
 const socialLabels: Record<string, string> = {
   linkedin: 'LinkedIn',
   instagram: 'Instagram',
@@ -69,7 +71,7 @@ const socialLabels: Record<string, string> = {
             tel && (
               <li>
                 <Icon name="phone" size={18} />
-                <a href={tel}>{site.contact.phoneDisplay ?? site.contact.phone}</a>
+                <a href={tel}>{phoneLabel(business)}</a>
               </li>
             )
           }
@@ -84,18 +86,18 @@ const socialLabels: Record<string, string> = {
             )
           }
           {
-            site.contact.email && (
+            business.contact.email && (
               <li>
                 <Icon name="mail" size={18} />
-                <a href={`mailto:${site.contact.email}`}>{site.contact.email}</a>
+                <a href={`mailto:${business.contact.email}`}>{business.contact.email}</a>
               </li>
             )
           }
           {
-            site.contact.address && (
+            business.contact.address && (
               <li>
                 <Icon name="mapPin" size={18} />
-                <span>{site.contact.address}</span>
+                <span class="site-footer__lines">{business.contact.address}</span>
               </li>
             )
           }
@@ -197,6 +199,11 @@ const socialLabels: Record<string, string> = {
   .site-footer a:hover {
     color: var(--white);
     text-decoration: underline;
+  }
+
+  .site-footer__lines {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
   }
 
   .site-footer__contact li {

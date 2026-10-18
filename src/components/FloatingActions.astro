@@ -2,10 +2,11 @@
 // Floating WhatsApp (all sizes) and Call (mobile only) buttons.
 // Renders nothing until a real number is configured in src/config/site.ts.
 import Icon from './Icon.astro';
-import { telLink, whatsappLink } from '../config/site';
+import { businessOf, telLink, whatsappLink } from '../config/site';
 
-const wa = whatsappLink();
-const tel = telLink();
+const business = businessOf(Astro.locals);
+const wa = whatsappLink(undefined, business);
+const tel = telLink(business);
 ---
 
 {

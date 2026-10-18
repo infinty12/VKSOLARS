@@ -41,6 +41,11 @@ export const FLASH = {
   backup: { kind: 'success', text: 'Backup created and verified.' },
   uploaded: { kind: 'success', text: 'Image uploaded. Check the alt text describes it before using it on the site.' },
   inuse: { kind: 'error', text: 'This image is in use, so it cannot be deleted. Remove it from those places first.' },
+  contentDraft: { kind: 'success', text: 'Draft saved. It is not public yet — preview it, then publish when ready.' },
+  contentPublished: { kind: 'success', text: 'Published. The website now shows these details.' },
+  contentDiscarded: { kind: 'success', text: 'Draft discarded. The website is unchanged.' },
+  contentRestored: { kind: 'success', text: 'Revision restored as a new draft. Publish it to make it live.' },
+  noDraft: { kind: 'info', text: 'There is no draft at the moment.' },
   notfound: { kind: 'error', text: 'That item no longer exists.' },
 } as const satisfies Record<string, { kind: 'success' | 'error' | 'info'; text: string }>;
 

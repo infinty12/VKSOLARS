@@ -1,0 +1,85 @@
+---
+// Admin-only preview of the DRAFT business details, rendered with the public layout so the
+// header, footer, call/WhatsApp buttons and contact card look exactly as they will once
+// published. It lives under /admin, so the middleware requires a signed-in administrator on
+// this computer and sends no-store + noindex headers; the page also sets <meta robots noindex>.
+// Only this response uses the draft: Astro.locals is per request.
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import ContactDetails from '../../../components/ContactDetails.astro';
+import CTASection from '../../../components/CTASection.astro';
+import { getDraft } from '../../../lib/server/site-content.ts';
+
+const draft = getDraft();
+if (!draft) return Astro.redirect('/admin/site-content?msg=noDraft', 303);
+Astro.locals.business = draft.data;
+---
+
+<SiteLayout title="Draft preview" description="Draft preview of the business details. Not published." noindex>
+  <div class="preview-banner" role="note" aria-label="Draft preview">
+    <div class="container preview-banner__inner">
+      <p>
+        <strong>Draft preview (revision #{draft.id}).</strong> Only visible to signed-in administrators — visitors still see the published
+        details.
+      </p>
+      <a href="/admin/site-content" class="preview-banner__link">Back to the editor</a>
+    </div>
+  </div>
+
+  <section class="section" aria-labelledby="preview-title">
+    <div class="container preview-layout">
+      <div>
+        <h1 id="preview-title" class="preview-title">How the business details will look</h1>
+        <p class="preview-text">
+          The header and footer of this page, the floating call/WhatsApp buttons and the card on the right use the draft. After publishing they
+          appear like this on every page.
+        </p>
+      </div>
+      <ContactDetails />
+    </div>
+  </section>
+
+  <CTASection />
+</SiteLayout>
+
+<style>
+  .preview-banner {
+    background: var(--color-warning-bg);
+    border-bottom: 2px solid var(--color-warning-border);
+    color: var(--color-warning);
+  }
+
+  .preview-banner__inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-1) var(--space-3);
+    padding-block: var(--space-1-5);
+  }
+
+  .preview-banner__link {
+    color: inherit;
+    font-weight: var(--fw-semibold);
+  }
+
+  .preview-layout {
+    display: grid;
+    gap: var(--space-4);
+    align-items: start;
+  }
+
+  .preview-title {
+    font-size: var(--fs-h2);
+  }
+
+  .preview-text {
+    margin-top: var(--space-1-5);
+    color: var(--text-secondary);
+  }
+
+  @media (min-width: 1025px) {
+    .preview-layout {
+      grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+    }
+  }
+</style>

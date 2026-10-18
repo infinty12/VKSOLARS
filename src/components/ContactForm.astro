@@ -3,7 +3,7 @@
 // Works without JavaScript (normal form post + redirect); the script adds inline validation,
 // in-page status and a duplicate-submission guard.
 import Icon from './Icon.astro';
-import { site, telLink, whatsappLink } from '../config/site';
+import { businessOf, phoneLabel, telLink, whatsappLink } from '../config/site';
 import { services } from '../data/services';
 import { LIMITS, CONSENT_TEXT, HONEYPOT_FIELD } from '../lib/enquiry';
 
@@ -18,17 +18,18 @@ interface Props {
 }
 
 const { open, token, regions, result = null } = Astro.props;
-const tel = telLink();
-const wa = whatsappLink();
+const business = businessOf(Astro.locals);
+const tel = telLink(business);
+const wa = whatsappLink(undefined, business);
 const serviceOptions = [...services.map((s) => ({ value: s.slug, label: s.title })), { value: 'not-sure', label: 'Not sure — please recommend' }];
 const states = regions.filter((r) => r.type === 'state');
 const uts = regions.filter((r) => r.type === 'ut');
 const fallback = tel
-  ? `Please call us on ${site.contact.phoneDisplay ?? site.contact.phone}`
+  ? `Please call us on ${phoneLabel(business)}`
   : wa
     ? 'Please message us on WhatsApp'
-    : site.contact.email
-      ? `Please email ${site.contact.email}`
+    : business.contact.email
+      ? `Please email ${business.contact.email}`
       : null;
 ---
 

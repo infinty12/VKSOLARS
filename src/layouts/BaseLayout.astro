@@ -19,7 +19,10 @@ const { title, description, jsonLd = [], noindex = false } = Astro.props;
 
 const fullTitle = Astro.url.pathname === '/' ? `${site.shortName} | ${site.headline}` : `${title} | ${site.shortName}`;
 // noindex pages (e.g. 404, which is served at arbitrary URLs) must not declare a canonical URL.
-const canonical = site.url && !noindex ? new URL(Astro.url.pathname, site.url).href : null;
+// Pages are server-rendered, so "/about" and "/about/" both resolve: always declare the
+// trailing-slash form (as the sitemap does) so search engines see one URL per page.
+const canonicalPath = Astro.url.pathname.endsWith('/') ? Astro.url.pathname : `${Astro.url.pathname}/`;
+const canonical = site.url && !noindex ? new URL(canonicalPath, site.url).href : null;
 const ogImage = site.url ? new URL('/og-image.jpg', site.url).href : null;
 ---
 
@@ -46,7 +49,10 @@ const ogImage = site.url ? new URL('/og-image.jpg', site.url).href : null;
     {ogImage && <meta property="og:image" content={ogImage} />}
     <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
 
-    {jsonLd.map((data) => <script type="application/ld+json" set:html={JSON.stringify(data)} />)}
+    {
+      /* "<" is escaped so stored text such as "</script>" can never end the script element early. */
+      jsonLd.map((data) => <script type="application/ld+json" set:html={JSON.stringify(data).replace(/</g, '\\u003c')} />)
+    }
 
     <script is:inline>
       document.documentElement.classList.add('js');

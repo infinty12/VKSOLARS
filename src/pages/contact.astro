@@ -4,8 +4,7 @@ import PageHero from '../components/PageHero.astro';
 import ContactForm from '../components/ContactForm.astro';
 import SectionHeading from '../components/SectionHeading.astro';
 import Button from '../components/Button.astro';
-import Icon from '../components/Icon.astro';
-import { site, telLink, whatsappLink } from '../config/site';
+import ContactDetails from '../components/ContactDetails.astro';
 import { enquiryGates } from '../lib/server/settings.ts';
 import { listRegions, type Region } from '../lib/server/areas.ts';
 import { issueFormToken, ENQUIRY_MESSAGES, REFERENCE_RE, type EnquiryMessageCode } from '../lib/server/enquiries.ts';
@@ -32,10 +31,6 @@ const formResult =
     : outcome && outcome in ENQUIRY_MESSAGES
       ? { kind: 'error' as const, message: ENQUIRY_MESSAGES[outcome as EnquiryMessageCode] }
       : null;
-
-const tel = telLink();
-const wa = whatsappLink();
-const hasDirect = Boolean(tel || wa || site.contact.email || site.contact.address);
 
 const nextSteps = [
   { title: 'We review your enquiry', text: 'Your details go straight to our team.' },
@@ -64,78 +59,9 @@ const nextSteps = [
       </div>
 
       <aside class="contact-aside" aria-label="Contact information">
-        <div class="aside-card">
-          <h2 class="aside-card__title">Contact details</h2>
-          {
-            hasDirect ? (
-              <ul role="list" class="contact-list">
-                {tel && (
-                  <li>
-                    <span class="contact-list__icon">
-                      <Icon name="phone" size={20} />
-                    </span>
-                    <span>
-                      <span class="contact-list__label">Phone</span>
-                      <a href={tel}>{site.contact.phoneDisplay ?? site.contact.phone}</a>
-                    </span>
-                  </li>
-                )}
-                {wa && (
-                  <li>
-                    <span class="contact-list__icon">
-                      <Icon name="chat" size={20} />
-                    </span>
-                    <span>
-                      <span class="contact-list__label">WhatsApp</span>
-                      <a href={wa} target="_blank" rel="noopener noreferrer">
-                        Message us<span class="sr-only"> (opens in a new tab)</span>
-                      </a>
-                    </span>
-                  </li>
-                )}
-                {site.contact.email && (
-                  <li>
-                    <span class="contact-list__icon">
-                      <Icon name="mail" size={20} />
-                    </span>
-                    <span>
-                      <span class="contact-list__label">Email</span>
-                      <a href={`mailto:${site.contact.email}`}>{site.contact.email}</a>
-                    </span>
-                  </li>
-                )}
-                {site.contact.address && (
-                  <li>
-                    <span class="contact-list__icon">
-                      <Icon name="mapPin" size={20} />
-                    </span>
-                    <span>
-                      <span class="contact-list__label">Office</span>
-                      {site.contact.address}
-                    </span>
-                  </li>
-                )}
-                {site.contact.hours && (
-                  <li>
-                    <span class="contact-list__icon">
-                      <Icon name="clock" size={20} />
-                    </span>
-                    <span>
-                      <span class="contact-list__label">Hours</span>
-                      {site.contact.hours}
-                    </span>
-                  </li>
-                )}
-              </ul>
-            ) : (
-              <p class="aside-card__text">
-                The enquiry form is the quickest way to reach us. Include your phone number and our team will call you back.
-              </p>
-            )
-          }
-        </div>
+        <ContactDetails />
 
-        <div class="aside-card">
+        <div class="aside-card aside-card--light">
           <h2 class="aside-card__title">What happens next</h2>
           <ol role="list" class="next-steps">
             {
@@ -221,7 +147,7 @@ const nextSteps = [
     color: var(--text-on-dark);
   }
 
-  .aside-card + .aside-card {
+  .aside-card--light {
     background: var(--white);
     color: var(--text-primary);
     border: var(--border-thin);
@@ -230,48 +156,6 @@ const nextSteps = [
   .aside-card__title {
     font-size: var(--fs-h4);
     margin-bottom: var(--space-2);
-  }
-
-  .aside-card__text {
-    color: var(--text-on-dark-muted);
-  }
-
-  .contact-list {
-    display: grid;
-    gap: var(--space-2);
-  }
-
-  .contact-list li {
-    display: flex;
-    gap: var(--space-1-5);
-    align-items: flex-start;
-    color: var(--text-on-dark-muted);
-  }
-
-  .contact-list > li > span:last-child {
-    display: grid;
-  }
-
-  .contact-list__icon {
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--brand-ice) 14%, transparent);
-    color: var(--sky-200);
-  }
-
-  .contact-list__label {
-    font-size: var(--fs-xs);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-
-  .contact-list a {
-    color: var(--white);
-    font-weight: var(--fw-semibold);
   }
 
   .next-steps {

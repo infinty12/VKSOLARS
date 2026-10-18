@@ -1,0 +1,399 @@
+---
+// Business details editor (Stage 7A): edit → save draft → preview → publish, with revision
+// history. Drafts never reach public pages; only publishDraft() changes what visitors see.
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Csrf from '../../../components/admin/Csrf.astro';
+import {
+  FIELD_LABELS,
+  FIELD_NAMES,
+  LIMITS,
+  changedFields,
+  contentState,
+  discardDraft,
+  getDraft,
+  getPublished,
+  listRevisions,
+  publishDraft,
+  restoreRevision,
+  saveDraft,
+  toFormValues,
+  validateBusiness,
+  editorBusiness,
+  livePublished,
+  type FieldName,
+  type FormValues,
+  type RevisionStatus,
+} from '../../../lib/server/site-content.ts';
+import { flashFrom } from '../../../lib/server/http.ts';
+
+const userId = Astro.locals.admin!.user.id;
+let values: FormValues = toFormValues(editorBusiness());
+let errors: Partial<Record<FieldName, string>> = {};
+let actionError: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('_action') ?? '');
+  if (action === 'save') {
+    const submitted = Object.fromEntries(FIELD_NAMES.map((f) => [f, String(form.get(f) ?? '').slice(0, 1000)])) as FormValues;
+    const result = validateBusiness(submitted);
+    if (result.ok) {
+      saveDraft(result.value, userId);
+      return Astro.redirect('/admin/site-content?msg=contentDraft', 303);
+    }
+    values = submitted;
+    errors = result.errors;
+    actionError = 'The draft was not saved. Correct the highlighted fields.';
+  } else if (action === 'publish') {
+    if (publishDraft(userId).ok) return Astro.redirect('/admin/site-content?msg=contentPublished', 303);
+    return Astro.redirect('/admin/site-content?msg=noDraft', 303);
+  } else if (action === 'discard') {
+    return Astro.redirect(`/admin/site-content?msg=${discardDraft(userId) ? 'contentDiscarded' : 'noDraft'}`, 303);
+  } else if (action === 'restore') {
+    const restored = restoreRevision(Number(form.get('revision')), userId);
+    return Astro.redirect(`/admin/site-content?msg=${restored ? 'contentRestored' : 'notfound'}`, 303);
+  } else {
+    actionError = 'Unknown action.';
+  }
+  Astro.response.status = 422;
+}
+
+const state = contentState();
+const draft = getDraft();
+const published = getPublished();
+const draftChanges = draft ? changedFields(livePublished(), draft.data) : [];
+const revisions = listRevisions(30);
+const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+const STATUS: Record<RevisionStatus, { label: string; badge: string }> = {
+  live: { label: 'Live', badge: 'admin-badge--on' },
+  draft: { label: 'Current draft', badge: 'admin-badge--new' },
+  previously_live: { label: 'Previously live', badge: 'admin-badge--off' },
+  unpublished: { label: 'Not published', badge: 'admin-badge--off' },
+};
+const errorIds = (f: FieldName) => (errors[f] ? `err-${f}` : undefined);
+const describedBy = (f: FieldName, hint?: string) => [hint, errorIds(f)].filter(Boolean).join(' ') || undefined;
+const flash = actionError ? { kind: 'error' as const, text: actionError } : flashFrom(Astro.url);
+
+const groups: { legend: string; hint?: string; fields: { name: FieldName; type?: 'tel' | 'email' | 'url' | 'text'; multiline?: number; hint?: string; autocomplete?: string; inputmode?: string }[] }[] = [
+  {
+    legend: 'Contact details',
+    hint: 'Shown in the header, footer, Contact page and call/WhatsApp buttons. Leave a field empty to hide it.',
+    fields: [
+      { name: 'phone', type: 'tel', hint: 'International format, e.g. +91 98765 43210. Used for call buttons.', autocomplete: 'off' },
+      { name: 'phoneDisplay', hint: 'Optional: how the number is written on the site, e.g. +91 98765 43210.', autocomplete: 'off' },
+      { name: 'whatsapp', type: 'tel', hint: 'Full number with country code. Shows WhatsApp buttons.', autocomplete: 'off' },
+      { name: 'email', type: 'email', autocomplete: 'off' },
+      { name: 'address', multiline: 4, hint: `Up to ${LIMITS.addressLines} lines, ${LIMITS.address} characters. A real office address only.` },
+      { name: 'hours', multiline: 3, hint: `Up to ${LIMITS.hoursLines} lines, e.g. “Mon–Sat 9:00–18:00”.` },
+    ],
+  },
+  {
+    legend: 'Social media',
+    hint: 'Full https:// addresses of real profiles only. Shown in the footer.',
+    fields: [
+      { name: 'linkedin', type: 'url', inputmode: 'url' },
+      { name: 'instagram', type: 'url', inputmode: 'url' },
+      { name: 'facebook', type: 'url', inputmode: 'url' },
+      { name: 'youtube', type: 'url', inputmode: 'url' },
+    ],
+  },
+  {
+    legend: 'Company',
+    fields: [{ name: 'founded', inputmode: 'numeric', hint: 'Only once confirmed. Used in search-engine data, not shown as text.' }],
+  },
+];
+---
+
+<AdminLayout title="Business details" crumbs={[{ label: 'Business details' }]} flash={flash}>
+  <section class="admin-card sc-status" aria-labelledby="sc-status-title">
+    <h2 id="sc-status-title">Publishing status</h2>
+    <dl class="sc-dl">
+      <div>
+        <dt>Live on the website</dt>
+        <dd>
+          {
+            published ? (
+              <>
+                Revision #{published.id}, published {fmt(published.publishedAt!)}
+                {published.publishedBy ? ` by ${published.publishedBy}` : ''}
+              </>
+            ) : (
+              'Built-in details (nothing published yet)'
+            )
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>Draft</dt>
+        <dd>
+          {
+            draft ? (
+              <>
+                Revision #{draft.id}, saved {fmt(draft.createdAt)}
+                {draft.createdBy ? ` by ${draft.createdBy}` : ''}. <strong>Not public until published.</strong>
+                {draftChanges.length > 0 ? (
+                  <span class="sc-changes">Changes from live: {draftChanges.map((f) => FIELD_LABELS[f]).join(', ')}.</span>
+                ) : (
+                  <span class="sc-changes">Same as the live version.</span>
+                )}
+              </>
+            ) : (
+              'No unpublished changes.'
+            )
+          }
+        </dd>
+      </div>
+    </dl>
+    {
+      draft && (
+        <div class="sc-actions">
+          <a href="/admin/site-content/preview" class="admin-btn admin-btn--secondary">
+            Preview draft
+          </a>
+          <form method="post" data-confirm="Publish this draft? The new details will appear on the public website immediately.">
+            <Csrf />
+            <input type="hidden" name="_action" value="publish" />
+            <button type="submit" class="admin-btn admin-btn--primary">
+              Publish draft
+            </button>
+          </form>
+          <form method="post" data-confirm="Discard this draft? The live website is not affected; the draft stays in the history.">
+            <Csrf />
+            <input type="hidden" name="_action" value="discard" />
+            <button type="submit" class="admin-btn admin-btn--secondary">
+              Discard draft
+            </button>
+          </form>
+        </div>
+      )
+    }
+  </section>
+
+  <section class="admin-card" aria-labelledby="sc-edit-title">
+    <h2 id="sc-edit-title">{draft ? 'Edit the draft' : 'Edit details'}</h2>
+    <p class="admin-hint">
+      Saving creates a draft. Nothing changes on the public website until you publish it. Enter only confirmed company details — plain text, no
+      HTML.
+    </p>
+    {
+      Object.keys(errors).length > 0 && (
+        <div class="sc-error-summary" role="alert" aria-labelledby="sc-error-title" tabindex="-1" data-error-summary>
+          <h3 id="sc-error-title">Please correct {Object.keys(errors).length === 1 ? 'this field' : 'these fields'}:</h3>
+          <ul>
+            {(Object.keys(errors) as FieldName[]).map((f) => (
+              <li>
+                <a href={`#f-${f}`}>
+                  {FIELD_LABELS[f]}: {errors[f]}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )
+    }
+    <form method="post" class="sc-form" novalidate data-unsaved-warning>
+      <Csrf />
+      <input type="hidden" name="_action" value="save" />
+      {
+        groups.map((g, gi) => (
+          <fieldset class="sc-fieldset" aria-describedby={g.hint ? `g-hint-${gi}` : undefined}>
+            <legend>{g.legend}</legend>
+            {g.hint && (
+              <p class="admin-hint" id={`g-hint-${gi}`}>
+                {g.hint}
+              </p>
+            )}
+            {g.fields.map((f) => (
+              <div class="admin-field">
+                <label for={`f-${f.name}`}>{FIELD_LABELS[f.name]}</label>
+                {f.multiline ? (
+                  <textarea
+                    id={`f-${f.name}`}
+                    name={f.name}
+                    rows={f.multiline}
+                    aria-invalid={errors[f.name] ? 'true' : undefined}
+                    aria-describedby={describedBy(f.name, f.hint ? `h-${f.name}` : undefined)}
+                  >{values[f.name]}</textarea>
+                ) : (
+                  <input
+                    id={`f-${f.name}`}
+                    name={f.name}
+                    type={f.type ?? 'text'}
+                    value={values[f.name]}
+                    autocomplete={f.autocomplete}
+                    inputmode={f.inputmode as 'url' | 'numeric' | undefined}
+                    spellcheck="false"
+                    aria-invalid={errors[f.name] ? 'true' : undefined}
+                    aria-describedby={describedBy(f.name, f.hint ? `h-${f.name}` : undefined)}
+                  />
+                )}
+                {f.hint && (
+                  <p class="admin-hint" id={`h-${f.name}`}>
+                    {f.hint}
+                  </p>
+                )}
+                {errors[f.name] && (
+                  <p class="admin-error" id={`err-${f.name}`}>
+                    {errors[f.name]}
+                  </p>
+                )}
+              </div>
+            ))}
+          </fieldset>
+        ))
+      }
+      <button type="submit" class="admin-btn admin-btn--primary">Save draft</button>
+    </form>
+  </section>
+
+  <section class="admin-card" aria-labelledby="sc-history-title">
+    <h2 id="sc-history-title">Revision history</h2>
+    {
+      revisions.length === 0 ? (
+        <p class="admin-empty">No revisions yet. Save a draft to start the history.</p>
+      ) : (
+        <div class="admin-table-wrap">
+          <table class="admin-table admin-table--stack">
+            <caption class="sr-only">Revisions of the business details, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col">Revision</th>
+                <th scope="col">Status</th>
+                <th scope="col">Saved</th>
+                <th scope="col">Changed fields</th>
+                <th scope="col">
+                  <span class="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {revisions.map((r) => (
+                <tr>
+                  <th scope="row">
+                    #{r.id}
+                    {r.restoredFrom && <span class="sc-muted"> (restored from #{r.restoredFrom})</span>}
+                  </th>
+                  <td data-label="Status">
+                    <span class:list={['admin-badge', STATUS[r.status].badge]}>{STATUS[r.status].label}</span>
+                    {r.publishedAt && <span class="sc-muted sc-block">Published {fmt(r.publishedAt)}</span>}
+                  </td>
+                  <td data-label="Saved">
+                    {fmt(r.createdAt)}
+                    {r.createdBy && <span class="sc-muted sc-block">by {r.createdBy}</span>}
+                  </td>
+                  <td data-label="Changed fields">{r.changed.length ? r.changed.map((f) => FIELD_LABELS[f]).join(', ') : <span class="sc-muted">None</span>}</td>
+                  <td>
+                    {r.id !== state.draftId && (
+                      <form method="post" class="admin-inline-form">
+                        <Csrf />
+                        <input type="hidden" name="_action" value="restore" />
+                        <input type="hidden" name="revision" value={r.id} />
+                        <button type="submit" class="admin-btn admin-btn--secondary">
+                          Restore as draft<span class="sr-only"> (revision #{r.id})</span>
+                        </button>
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+  </section>
+</AdminLayout>
+
+<script>
+  // Move focus to the error summary so keyboard and screen-reader users hear what went wrong.
+  document.querySelector<HTMLElement>('[data-error-summary]')?.focus();
+</script>
+
+<style>
+  .sc-dl {
+    display: grid;
+    gap: var(--space-1-5);
+    margin-block: var(--space-1-5);
+  }
+
+  .sc-dl > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .sc-dl dt {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .sc-changes,
+  .sc-block {
+    display: block;
+  }
+
+  .sc-changes {
+    margin-top: 4px;
+    color: var(--text-secondary);
+  }
+
+  .sc-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1-5);
+  }
+
+  .sc-form {
+    display: grid;
+    gap: var(--space-3);
+    justify-items: start;
+    margin-top: var(--space-2);
+  }
+
+  .sc-fieldset {
+    display: grid;
+    gap: var(--space-2);
+    width: 100%;
+    max-width: 720px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .sc-fieldset legend {
+    margin-bottom: var(--space-1);
+    font-family: var(--font-heading);
+    font-size: var(--fs-h4);
+    font-weight: var(--fw-semibold);
+  }
+
+  .sc-error-summary {
+    margin-top: var(--space-2);
+    padding: var(--space-2);
+    border: 2px solid var(--color-error);
+    border-radius: var(--radius-md);
+  }
+
+  .sc-error-summary h3 {
+    font-size: var(--fs-base);
+  }
+
+  .sc-error-summary ul {
+    display: grid;
+    gap: 4px;
+    margin-top: var(--space-1);
+    padding-left: var(--space-3);
+    list-style: disc;
+  }
+
+  .sc-error-summary a {
+    color: var(--color-error);
+  }
+
+  .sc-muted {
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+  }
+</style>

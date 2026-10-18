@@ -1,0 +1,145 @@
+---
+// "Contact details" card on the Contact page (and the admin draft preview). Shows only the
+// details that are set; with none, it points to the enquiry form. All values are plain text,
+// escaped on output; multi-line address/hours keep their line breaks via CSS, never HTML.
+import Icon from './Icon.astro';
+import { businessOf, phoneLabel, telLink, whatsappLink } from '../config/site';
+
+const business = businessOf(Astro.locals);
+const c = business.contact;
+const tel = telLink(business);
+const wa = whatsappLink(undefined, business);
+const hasDirect = Boolean(tel || wa || c.email || c.address || c.hours);
+---
+
+<div class="aside-card">
+  <h2 class="aside-card__title">Contact details</h2>
+  {
+    hasDirect ? (
+      <ul role="list" class="contact-list">
+        {tel && (
+          <li>
+            <span class="contact-list__icon">
+              <Icon name="phone" size={20} />
+            </span>
+            <span>
+              <span class="contact-list__label">Phone</span>
+              <a href={tel}>{phoneLabel(business)}</a>
+            </span>
+          </li>
+        )}
+        {wa && (
+          <li>
+            <span class="contact-list__icon">
+              <Icon name="chat" size={20} />
+            </span>
+            <span>
+              <span class="contact-list__label">WhatsApp</span>
+              <a href={wa} target="_blank" rel="noopener noreferrer">
+                Message us<span class="sr-only"> (opens in a new tab)</span>
+              </a>
+            </span>
+          </li>
+        )}
+        {c.email && (
+          <li>
+            <span class="contact-list__icon">
+              <Icon name="mail" size={20} />
+            </span>
+            <span>
+              <span class="contact-list__label">Email</span>
+              <a href={`mailto:${c.email}`}>{c.email}</a>
+            </span>
+          </li>
+        )}
+        {c.address && (
+          <li>
+            <span class="contact-list__icon">
+              <Icon name="mapPin" size={20} />
+            </span>
+            <span>
+              <span class="contact-list__label">Office</span>
+              <span class="contact-list__lines" data-field="address">{c.address}</span>
+            </span>
+          </li>
+        )}
+        {c.hours && (
+          <li>
+            <span class="contact-list__icon">
+              <Icon name="clock" size={20} />
+            </span>
+            <span>
+              <span class="contact-list__label">Hours</span>
+              <span class="contact-list__lines" data-field="hours">{c.hours}</span>
+            </span>
+          </li>
+        )}
+      </ul>
+    ) : (
+      <p class="aside-card__text">The enquiry form is the quickest way to reach us. Include your phone number and our team will call you back.</p>
+    )
+  }
+</div>
+
+<style>
+  .aside-card {
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    background: var(--gradient-dark);
+    color: var(--text-on-dark);
+  }
+
+  .aside-card__title {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-2);
+  }
+
+  .aside-card__text {
+    color: var(--text-on-dark-muted);
+  }
+
+  .contact-list {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .contact-list li {
+    display: flex;
+    gap: var(--space-1-5);
+    align-items: flex-start;
+    color: var(--text-on-dark-muted);
+  }
+
+  .contact-list > li > span:last-child {
+    display: grid;
+    min-width: 0;
+  }
+
+  .contact-list__icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--brand-ice) 14%, transparent);
+    color: var(--sky-200);
+  }
+
+  .contact-list__label {
+    font-size: var(--fs-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .contact-list a {
+    color: var(--white);
+    font-weight: var(--fw-semibold);
+    overflow-wrap: anywhere;
+  }
+
+  .contact-list__lines {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+</style>

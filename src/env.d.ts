@@ -7,5 +7,7 @@ declare namespace App {
       user: import('./lib/server/auth.ts').AdminUser;
       csrfToken: string;
     };
+    /** Published business details for public pages (set by middleware; drafts only on the admin preview). */
+    business?: import('./config/site.ts').BusinessDetails;
   }
 }

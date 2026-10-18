@@ -7,8 +7,11 @@ import { defineConfig, devices } from '@playwright/test';
 //   :4397  default server — enquiries CLOSED, exactly as shipped (test-storage/)
 //   :4395  "open" server  — enquiries enabled; rate limit / minimum fill time relaxed so UI tests
 //          aren't blocked (test-storage-open/). The strict defaults are tested by smoke:admin.
+//   :4393  "content" server — for the business-details editor, whose published changes appear on
+//          every page; kept separate so they can't affect other tests (test-storage-content/).
 const PORT = 4397;
 export const OPEN_PORT = 4395;
+export const CONTENT_PORT = 4393;
 
 export default defineConfig({
   testDir: './tests',
@@ -47,6 +50,13 @@ export default defineConfig({
         ENQUIRY_RATE_LIMIT_PER_IP: '100000',
         ENQUIRY_RATE_LIMIT_GLOBAL: '100000',
       },
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
+      command: 'node scripts/test-server.mjs',
+      url: `http://127.0.0.1:${CONTENT_PORT}/robots.txt`,
+      env: { PORT: String(CONTENT_PORT), STORAGE_DIR: 'test-storage-content' },
       reuseExistingServer: false,
       timeout: 60_000,
     },

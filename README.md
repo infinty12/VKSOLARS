@@ -7,8 +7,8 @@ local admin panel for **service-area coverage across India** and an **enquiry in
 Node’s built-in `node:sqlite` · Nodemailer (optional email notifications) · Sharp (image validation) · plain CSS design
 tokens · Playwright, axe-core and `node:test` tests.
 
-- Content pages (`/`, `/services`, `/ai-drone-inspection`, `/about`, 404) are **pre-rendered** static HTML.
-- `/service-areas`, `/contact`, `/api/enquiries` and `/admin/**` are **server-rendered** and read the database.
+- All pages are **server-rendered** (only `robots.txt` is pre-rendered), so published business details and service areas
+  appear without a rebuild. Page text itself still lives in the code.
 - Everything runs locally. **Not deployed.** The admin is reachable only from this computer by default.
 
 ---
@@ -38,7 +38,7 @@ Stop the server with **Ctrl+C**. To restart after code changes: `npm run build`,
 | Command | What it does |
 |---|---|
 | `npm run dev` | Development server with hot reload (no security headers; uses `./storage`) |
-| `npm run build` | Production build to `dist/` (server + pre-rendered pages) |
+| `npm run build` | Production build to `dist/` (server + static assets) |
 | `npm start` | Run the built site with security headers via `server.mjs` (loads `.env`) |
 | `npm run preview` | Same as `npm start` |
 | `npm run db:migrate` | Apply pending database migrations (safe to repeat) |
@@ -249,8 +249,11 @@ The admin panel has the same create/list/verify actions under **Backups**. Resto
 
 ## Business information — `src/config/site.ts`
 
-Company facts shown on the static pages come from this one file, and **anything left `null` or empty is hidden** — the site
+Company facts shown on the site come from this one file, and **anything left `null` or empty is hidden** — the site
 never shows invented data. (Service coverage and enquiries are in the database instead, managed in the admin.)
+
+The **contact details, social links and founding year** here are only the defaults: once an administrator publishes
+business details in **Admin → Business details**, the published version is shown instead (see below).
 
 | Field | Shows up as |
 |---|---|
@@ -263,6 +266,28 @@ never shows invented data. (Service coverage and enquiries are in the database i
 | `team`, `achievements` | About page (a clearly marked “coming soon” note shows while `team` is empty) |
 | `founded` | JSON-LD `foundingDate` |
 
+### Business details editor (Admin → Business details)
+
+Edits phone, display phone, WhatsApp, email, office address, opening hours, LinkedIn/Instagram/Facebook/YouTube links and the
+founding year — and nothing else (page text, services and service slugs stay in the code).
+
+- **Draft → preview → publish.** *Save draft* stores a new revision; the public site is unchanged. *Preview draft* opens
+  `/admin/site-content/preview`, which renders the real header, footer, call/WhatsApp buttons and contact card with the draft.
+  It is under `/admin` (sign-in, this computer only, `no-store` and `noindex` headers, plus `<meta robots noindex>`).
+  *Publish draft* (with confirmation) makes it live everywhere at once. *Discard draft* drops it.
+- **Revision history** lists every saved version (live, current draft, previously live, never published) with who saved it
+  and which fields changed. *Restore as draft* copies any version into a new draft — it still has to be published.
+- **Safe values.** Server-side validation: phone/WhatsApp in international format (the display form must be the same
+  number), a real email address, social links only as `https://` addresses on the matching network, a year from 1900
+  to now, length and line limits for address/hours. Everything is stored and shown as plain text: never interpreted as
+  HTML, escaped on output, line breaks shown with CSS. JSON-LD escapes `<`, so stored text can't end the script tag.
+  Stored revisions are validated again when read.
+- **Empty means hidden**, exactly as with `site.ts`: an empty field removes its link or line, and no empty sections are left.
+- **Fallback.** With nothing published — or if the database can't be read — the defaults from `site.ts` are shown.
+- **Audit log** records draft, publish, discard and restore with revision ids and changed field names, never the values.
+- Tables: `content_revisions` (immutable versions) and `content_state` (current draft and published pointers), migration 7.
+  Both are included in backups.
+
 ## AI drone dashboard
 
 The dashboard on `/ai-drone-inspection` is a **demonstration** using invented numbers from
@@ -273,7 +298,7 @@ API or telemetry feed.
 
 | Item | Status |
 |---|---|
-| Phone, WhatsApp, email, office address, hours | **Not provided** — hidden |
+| Phone, WhatsApp, email, office address, hours, social links | **Not provided** — hidden; publish them in Admin → Business details |
 | Live domain | **Not provided** — canonical/sitemap disabled |
 | Confirmed service locations | **Not provided** — add them in Admin → Service Areas |
 | Company statistics, testimonials | **Not provided** — sections hidden |

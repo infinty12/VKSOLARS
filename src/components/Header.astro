@@ -3,10 +3,11 @@ import Logo from './Logo.astro';
 import Icon from './Icon.astro';
 import Button from './Button.astro';
 import { mainNav, isActive } from '../config/navigation';
-import { site, telLink } from '../config/site';
+import { businessOf, phoneLabel, telLink } from '../config/site';
 
 const path = Astro.url.pathname;
-const tel = telLink();
+const business = businessOf(Astro.locals);
+const tel = telLink(business);
 ---
 
 <header class="site-header" data-header>
@@ -35,7 +36,7 @@ const tel = telLink();
         tel && (
           <a href={tel} class="header-call">
             <Icon name="phone" size={18} />
-            <span>{site.contact.phoneDisplay ?? site.contact.phone}</span>
+            <span>{phoneLabel(business)}</span>
           </a>
         )
       }
@@ -75,7 +76,7 @@ const tel = telLink();
       {
         tel && (
           <Button href={tel} variant="secondary" size="lg" icon="phone" iconPosition="start">
-            Call {site.contact.phoneDisplay ?? site.contact.phone}
+            Call {phoneLabel(business)}
           </Button>
         )
       }

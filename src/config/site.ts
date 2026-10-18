@@ -4,6 +4,10 @@
  * EVERY company fact shown on the site comes from this file. Leave a value as `null`
  * or an empty array until it is verified — the related UI is then hidden or shown
  * as a clearly marked placeholder. Never fill these with guesses.
+ *
+ * Contact details, social links and the founding year are the DEFAULTS for the business
+ * details an administrator can publish in Admin → Business details. Public pages show the
+ * published version when there is one (see businessOf), otherwise these values.
  */
 
 export interface Stat {
@@ -33,7 +37,8 @@ export interface TeamMember {
   photo?: string;
 }
 
-const env = import.meta.env;
+// import.meta.env is provided by Astro/Vite; plain Node (unit tests, scripts) has none.
+const env: Partial<ImportMetaEnv> = import.meta.env ?? {};
 
 export const site = {
   name: 'VK Solar High-Tech Power Solution',
@@ -91,19 +96,48 @@ export const site = {
   // and stored in the database, so it can be published without code changes.
 } as const;
 
+/** The business details an administrator can edit and publish (Admin → Business details). */
+export interface BusinessDetails {
+  contact: {
+    phone: string | null;
+    phoneDisplay: string | null;
+    whatsapp: string | null;
+    email: string | null;
+    address: string | null;
+    hours: string | null;
+  };
+  social: { linkedin: string | null; instagram: string | null; facebook: string | null; youtube: string | null };
+  founded: number | null;
+}
+
+/** Built-in defaults, used until something is published (or if the database is unavailable). */
+export const defaultBusiness: BusinessDetails = {
+  contact: { ...site.contact },
+  social: { ...site.social },
+  founded: site.founded,
+};
+
+/** The business details for this request: the published version set by the middleware, else the defaults. */
+export const businessOf = (locals: App.Locals): BusinessDetails => locals.business ?? defaultBusiness;
+
+export const phoneLabel = (b: BusinessDetails = defaultBusiness) => b.contact.phoneDisplay ?? b.contact.phone;
+
 export const hasPhone = Boolean(site.contact.phone);
 export const hasWhatsApp = Boolean(site.contact.whatsapp);
 export const hasEmail = Boolean(site.contact.email);
 
-export function whatsappLink(message = `Hello ${site.shortName}, I would like to enquire about your solar services.`) {
-  if (!site.contact.whatsapp) return null;
-  return `https://wa.me/${site.contact.whatsapp}?text=${encodeURIComponent(message)}`;
+export function whatsappLink(message = `Hello ${site.shortName}, I would like to enquire about your solar services.`, b: BusinessDetails = defaultBusiness) {
+  if (!b.contact.whatsapp) return null;
+  return `https://wa.me/${b.contact.whatsapp}?text=${encodeURIComponent(message)}`;
 }
 
-export function telLink() {
-  return site.contact.phone ? `tel:${site.contact.phone}` : null;
+export function telLink(b: BusinessDetails = defaultBusiness) {
+  return b.contact.phone ? `tel:${b.contact.phone}` : null;
 }
 
-export const socialLinks = (Object.entries(site.social) as [string, string | null][])
-  .filter((entry): entry is [string, string] => Boolean(entry[1]))
-  .map(([network, href]) => ({ network, href }));
+export const socialLinksOf = (b: BusinessDetails = defaultBusiness) =>
+  (Object.entries(b.social) as [string, string | null][])
+    .filter((entry): entry is [string, string] => Boolean(entry[1]))
+    .map(([network, href]) => ({ network, href }));
+
+export const socialLinks = socialLinksOf(defaultBusiness);
