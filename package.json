@@ -26,7 +26,10 @@
     "validate:html": "html-validate \".snapshot/**/*.html\"",
     "seo": "node scripts/check-seo.mjs",
     "smoke:admin": "node scripts/smoke-admin.mjs",
-    "verify": "npm run check && npm run lint && npm run contrast && npm run tokens && npm run test:unit && npm run build && npm run snapshot && npm run links && npm run validate:html && npm run seo && npm run smoke:admin && npm run test"
+    "verify": "npm run check && npm run lint && npm run contrast && npm run tokens && npm run test:unit && npm run build && npm run snapshot && npm run links && npm run validate:html && npm run seo && npm run smoke:admin && npm run test",
+    "backup": "node --env-file-if-exists=.env scripts/backup.mjs",
+    "backup:list": "node --env-file-if-exists=.env scripts/backup-list.mjs",
+    "restore": "node --env-file-if-exists=.env scripts/restore.mjs"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.8",

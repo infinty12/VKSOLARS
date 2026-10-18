@@ -66,7 +66,8 @@ are wiped on every run and excluded from Git.
 | Variable | Purpose | Default |
 |---|---|---|
 | `PUBLIC_SITE_URL` | Live domain (set at **build** time). Enables canonical URLs, `og:url`/`og:image`, sitemap | unset |
-| `STORAGE_DIR` | Database, secret key and backups | `./storage` |
+| `STORAGE_DIR` | Database, secret key and uploads | `./storage` |
+| `BACKUP_DIR` | Where `npm run backup` and the admin Backups page save backups | `./backups` |
 | `ENQUIRIES_ENABLED` | Server switch for public enquiries (see below) | off |
 | `APP_SECRET` | Secret for signing form tokens; if unset, a random key is created in `STORAGE_DIR` | auto |
 | `HOST` / `PORT` | Network binding | `127.0.0.1` / `4321` |
@@ -203,17 +204,34 @@ enforced before reading), a `media` database table (alt text, owner, dimensions)
 - File: `storage\vk-solar.db` (SQLite, WAL mode). Migrations live in `src/lib/server/migrations.ts` and are applied in
   order by `npm run db:migrate` (and automatically on first server start). Migrations are append-only: never edit one
   that has shipped.
-- **Back up** while the server is stopped (Ctrl+C), by copying the whole storage folder:
 
-  ```powershell
-  Copy-Item -Recurse storage "backups\storage-$(Get-Date -Format yyyyMMdd-HHmmss)"
-  ```
+### Backups
 
-  The folder contains customer enquiries (and, later, uploaded images) — keep backups private and out of Git (`backups/`
-  is ignored). It does not contain SMTP credentials; those live only in `.env`.
-- **Restore:** stop the server, move the current `storage` aside, copy the backup folder back to `storage`, run
-  `npm run db:migrate`, then `npm start`.
-- A built-in backup/restore command is not part of this stage yet.
+```powershell
+npm run backup                     # create a backup (safe while the server is running)
+npm run backup -- --keep 10        # ...and then delete all but the newest 10 manual backups
+npm run backup:list                # list backups, newest first
+npm run backup:list -- --verify    # ...and re-check every checksum (exit code 1 if any fail)
+npm run restore -- backup-20261018-093000-123   # restore (server must be stopped)
+```
+
+The admin panel has the same create/list/verify actions under **Backups**. Restoring is command-line only.
+
+- **What a backup is:** a folder `backups\backup-YYYYMMDD-HHMMSS-mmm\` with a consistent online copy of the database
+  (SQLite backup API), a copy of `storage\uploads` if present, and `manifest.json` (format, schema version, row counts and
+  a SHA-256 checksum for every file). A backup only appears once it is complete and its copy has passed an integrity check.
+- **Never included:** `.env`, SMTP credentials, `storage\secret.key` and the mail test outbox. After restoring on a
+  different computer a new secret key is generated automatically; the only effect is that contact forms already open in a
+  browser must be reloaded. Admin accounts and passwords are in the database, so they are restored.
+- **Restore** checks everything first (manifest, every checksum, no unexpected files, database integrity, required tables,
+  schema not newer than the code) and changes nothing if any check fails. It refuses while the server is running (it
+  checks `storage\server.pid`), asks you to type `RESTORE` (or pass `--yes`), saves the current data as a
+  `...-safety` backup, swaps the files in, then applies any newer migrations. To undo a restore, restore the safety backup.
+- **Pruning** happens only when you pass `--keep N`; safety backups are never pruned automatically.
+- Backups contain customer enquiries. Keep them private and out of Git (`backups/` is ignored), and keep a copy
+  off this computer (for example an encrypted external drive) — a backup on the same disk does not protect against disk
+  failure. They are not encrypted by this tool. Set `BACKUP_DIR` to store them elsewhere.
+
 
 ## Business information — `src/config/site.ts`
 

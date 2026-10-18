@@ -4,6 +4,7 @@
 //   a restart); the folder-name safety check still applies.
 //   A test administrator with a random password is created and written to
 //   <STORAGE_DIR>/test-admin.json for the test suite to read. Nothing is hardcoded.
+//   Backups always go to <STORAGE_DIR>/backups (wiped with it), never to the real ./backups.
 import { rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, join, basename } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -24,6 +25,7 @@ if (!keep) {
   mkdirSync(storage, { recursive: true });
 }
 process.env.STORAGE_DIR = storage;
+process.env.BACKUP_DIR = join(storage, 'backups');
 
 const { getDb } = await import('../src/lib/server/db.ts');
 getDb();

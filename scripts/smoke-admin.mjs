@@ -103,7 +103,7 @@ try {
   }
 
   // ---- Unauthenticated access
-  for (const p of ['/admin', '/admin/', '/admin/service-areas', '/admin/service-areas/new', '/admin/service-areas/1']) {
+  for (const p of ['/admin', '/admin/', '/admin/service-areas', '/admin/service-areas/new', '/admin/service-areas/1', '/admin/backups']) {
     const r = await get(p);
     check(`GET ${p} unauthenticated → 303 to /admin/login`, r.status === 303 && r.headers.get('location')?.startsWith('/admin/login'), `${r.status} ${r.headers.get('location')}`);
   }

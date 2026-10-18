@@ -1,0 +1,187 @@
+---
+// Backups: list, verify and create (online, safe while running). Restore is deliberately
+// command-line only because it requires the server to be stopped. No browser download:
+// backups contain customer enquiries.
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Csrf from '../../components/admin/Csrf.astro';
+import { createBackup, listBackups, verifyBackup, backupRoot, type VerifyResult } from '../../lib/server/backup.ts';
+import { audit } from '../../lib/server/audit.ts';
+import { flashFrom } from '../../lib/server/http.ts';
+
+const userId = Astro.locals.admin!.user.id;
+let actionError: string | null = null;
+let verified: { name: string; result: VerifyResult } | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('_action') ?? '');
+  if (action === 'create') {
+    try {
+      const b = await createBackup();
+      audit('backup.create', { userId, targetType: 'backup', targetId: b.name, detail: { files: b.manifest?.files.length ?? 0 } });
+      return Astro.redirect('/admin/backups?msg=backup', 303);
+    } catch (err) {
+      console.error('[backups] create failed:', (err as Error).name);
+      actionError = 'The backup could not be created. Check that the storage folder is readable and there is free disk space.';
+    }
+  } else if (action === 'verify') {
+    const name = String(form.get('name') ?? '');
+    verified = { name, result: verifyBackup(name) };
+    audit('backup.verify', { userId, targetType: 'backup', targetId: name.slice(0, 60), detail: { ok: verified.result.ok } });
+  } else {
+    actionError = 'Unknown action.';
+  }
+  if (actionError) Astro.response.status = 500;
+}
+
+const backups = listBackups();
+const latest = backups.find((b) => b.manifest?.kind === 'manual') ?? null;
+const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+const kb = (n: number) => (n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+const ageDays = latest?.manifest ? Math.floor((Date.now() - new Date(latest.manifest.createdAt).getTime()) / 86400000) : null;
+const flash = actionError
+  ? { kind: 'error' as const, text: actionError }
+  : verified
+    ? verified.result.ok
+      ? { kind: 'success' as const, text: `${verified.name} verified: all files match their checksums and the database is intact.` }
+      : { kind: 'error' as const, text: `${verified.name} failed verification: ${verified.result.problems.join(' ')}` }
+    : flashFrom(Astro.url);
+---
+
+<AdminLayout title="Backups" crumbs={[{ label: 'Backups' }]} flash={flash}>
+  <section class="admin-card bk-card" aria-labelledby="bk-now-title">
+    <h2 id="bk-now-title">Create a backup</h2>
+    <p>
+      Copies the database (enquiries, service areas, settings, admin accounts) and any uploads into a new folder, with a checksum
+      for every file. Safe to run while the site is in use.
+    </p>
+    <p class="bk-status" role="status">
+      {
+        latest?.manifest ? (
+          <>
+            Last backup: <strong>{fmt(latest.manifest.createdAt)}</strong>
+            {ageDays !== null && ageDays >= 7 && <span class="admin-badge admin-badge--new">{ageDays} days ago</span>}
+          </>
+        ) : (
+          <strong>No backups yet.</strong>
+        )
+      }
+    </p>
+    <form method="post">
+      <Csrf />
+      <input type="hidden" name="_action" value="create" />
+      <button type="submit" class="admin-btn admin-btn--primary">Create backup now</button>
+    </form>
+    <p class="admin-hint">
+      Backups are saved on this computer in <code>{backupRoot()}</code>. They contain customer details — keep copies private (for example an
+      encrypted external drive). They never contain <code>.env</code> or email passwords.
+    </p>
+  </section>
+
+  <section class="admin-card bk-card" aria-labelledby="bk-list-title">
+    <h2 id="bk-list-title">Saved backups</h2>
+    {
+      backups.length === 0 ? (
+        <p class="admin-empty">No backups yet.</p>
+      ) : (
+        <div class="admin-table-wrap">
+          <table class="admin-table admin-table--stack">
+            <caption class="sr-only">Saved backups, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col">Backup</th>
+                <th scope="col">Created</th>
+                <th scope="col">Contents</th>
+                <th scope="col">Size</th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {backups.map((b) => (
+                <tr>
+                  <th scope="row">
+                    <span class="mono bk-name">{b.name}</span>
+                    {b.manifest?.kind === 'safety' && <span class="admin-badge admin-badge--off">Safety copy before a restore</span>}
+                    {!b.manifest && <span class="admin-badge admin-badge--new">Manifest missing</span>}
+                  </th>
+                  <td data-label="Created">{b.manifest ? fmt(b.manifest.createdAt) : '—'}</td>
+                  <td data-label="Contents">
+                    {b.manifest
+                      ? `${b.manifest.counts.enquiries} enquiries · ${b.manifest.counts.locations} locations · ${b.manifest.counts.uploads} uploads · schema v${b.manifest.schemaVersion}`
+                      : '—'}
+                  </td>
+                  <td data-label="Size">{kb(b.totalBytes)}</td>
+                  <td>
+                    <form method="post" class="admin-inline-form">
+                      <Csrf />
+                      <input type="hidden" name="_action" value="verify" />
+                      <input type="hidden" name="name" value={b.name} />
+                      <button type="submit" class="admin-btn admin-btn--secondary">
+                        Verify<span class="sr-only"> {b.name}</span>
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+  </section>
+
+  <section class="admin-card bk-card" aria-labelledby="bk-restore-title">
+    <h2 id="bk-restore-title">Restoring a backup</h2>
+    <p>Restoring replaces the current data, so it is done from a terminal with the site stopped:</p>
+    <ol class="bk-steps">
+      <li>Stop the site (press <kbd>Ctrl</kbd>+<kbd>C</kbd> in the window running <code>npm start</code>).</li>
+      <li>In the project folder run <code>npm run restore -- {latest?.name ?? 'backup-YYYYMMDD-HHMMSS-mmm'}</code> and type <code>RESTORE</code> when asked.</li>
+      <li>The backup is verified first; if anything is wrong, nothing is changed. Your current data is saved as a safety backup before it is replaced.</li>
+      <li>Start the site again with <code>npm start</code>.</li>
+    </ol>
+  </section>
+</AdminLayout>
+
+<style>
+  .bk-card {
+    max-width: 960px;
+  }
+
+  .bk-card > p {
+    color: var(--text-secondary);
+    margin-bottom: var(--space-2);
+  }
+
+  .bk-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .bk-card form:not(.admin-inline-form) {
+    margin-bottom: var(--space-2);
+  }
+
+  .bk-name {
+    display: block;
+    font-size: var(--fs-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .bk-steps {
+    display: grid;
+    gap: var(--space-1);
+    padding-left: var(--space-3);
+    list-style: decimal;
+    color: var(--text-secondary);
+  }
+
+  kbd {
+    padding: 0 4px;
+    border: 1px solid var(--color-border-control);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+</style>

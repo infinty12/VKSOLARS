@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { loginAsAdmin } from './helpers/admin';
 
 const pages = ['/', '/services', '/ai-drone-inspection', '/about', '/service-areas', '/contact', '/404'];
 const widths = [375, 390, 768, 1024, 1280, 1440];
@@ -30,6 +31,33 @@ test.describe('accessibility (axe, WCAG 2.1 A/AA)', () => {
     const results = await new AxeBuilder({ page }).include('header').withTags(['wcag2a', 'wcag2aa']).analyze();
     expect(results.violations.map((v) => v.id)).toEqual([]);
   });
+});
+
+test.describe('responsive admin layout', () => {
+  // Runs once (desktop project) and opens its own phone-emulating context per width: with
+  // isMobile, a page wider than the screen silently widens the layout viewport, so we compare
+  // the document width against the configured width, not against window.innerWidth.
+  // Scroll containers inside the page (e.g. the admin nav) may scroll; the page itself must not.
+  test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'widths are set explicitly');
+  const adminPages = ['/admin', '/admin/service-areas', '/admin/service-areas/new', '/admin/enquiries', '/admin/enquiries/settings', '/admin/backups'];
+
+  for (const width of [375, 390]) {
+    test(`signed-in admin pages do not overflow horizontally at ${width}px`, async ({ browser, baseURL }) => {
+      const context = await browser.newContext({ baseURL, viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
+      try {
+        const page = await context.newPage();
+        await loginAsAdmin(page);
+        for (const path of adminPages) {
+          await page.goto(path);
+          const size = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, layout: window.innerWidth }));
+          expect(size.doc, `${path} document is ${size.doc}px wide at ${width}px`).toBeLessThanOrEqual(width);
+          expect(size.layout, `${path} layout viewport widened to ${size.layout}px at ${width}px`).toBe(width);
+        }
+      } finally {
+        await context.close();
+      }
+    });
+  }
 });
 
 test.describe('responsive layout', () => {

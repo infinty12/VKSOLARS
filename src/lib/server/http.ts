@@ -38,6 +38,7 @@ export const FLASH = {
   status: { kind: 'success', text: 'Status updated.' },
   note: { kind: 'success', text: 'Note added.' },
   purged: { kind: 'success', text: 'Retention clean-up finished.' },
+  backup: { kind: 'success', text: 'Backup created and verified.' },
   notfound: { kind: 'error', text: 'That item no longer exists.' },
 } as const satisfies Record<string, { kind: 'success' | 'error' | 'info'; text: string }>;
 
