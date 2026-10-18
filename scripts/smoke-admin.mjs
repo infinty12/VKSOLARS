@@ -54,14 +54,17 @@ async function login(base, username, password, next = '') {
 
 const A = { port: 4398, storage: resolve('.smoke-a-test-storage') };
 const B = { port: 4396, storage: resolve('.smoke-b-test-storage') };
+const C = { port: 4394, storage: resolve('.smoke-c-test-storage') };
 const servers = [];
 let exit = 0;
 
 try {
   const a = startServer(A.port, A.storage);
   const b = startServer(B.port, B.storage, { TRUST_PROXY: 'true' });
-  servers.push(a.child, b.child);
-  await Promise.all([a.ready, b.ready]);
+  // C: enquiries OPEN with the DEFAULT (strict) rate limit and minimum fill time.
+  const c = startServer(C.port, C.storage, { ENQUIRIES_ENABLED: 'true', TEST_ACCEPT_ENQUIRIES: 'true' });
+  servers.push(a.child, b.child, c.child);
+  await Promise.all([a.ready, b.ready, c.ready]);
   const base = `http://127.0.0.1:${A.port}`;
   const baseB = `http://127.0.0.1:${B.port}`;
   const creds = JSON.parse(readFileSync(join(A.storage, 'test-admin.json'), 'utf8'));
@@ -190,6 +193,121 @@ try {
   const localB = await login(baseB, credsB.username, credsB.password);
   check('TRUST_PROXY=true + loopback client → login still works', localB.status === 303, String(localB.status));
 
+  // ---- Enquiry endpoint on server C (open, default strict limits)
+  const baseC = `http://127.0.0.1:${C.port}`;
+  const countC = (where = '1=1') => {
+    const d = new DatabaseSync(join(C.storage, 'vk-solar.db'), { readOnly: true });
+    const n = d.prepare(`SELECT COUNT(*) AS n FROM enquiries WHERE ${where}`).get().n;
+    d.close();
+    return n;
+  };
+  const contactHtml = await (await fetch(`${baseC}/contact`)).text();
+  const tokenC = contactHtml.match(/name="_t" value="([^"]+)"/)?.[1];
+  check('contact page (open) embeds a signed form token and no "not active" notice', !!tokenC && !contactHtml.includes('data-unconfigured'));
+  const validEnquiry = { name: 'Smoke Customer', phone: '9876543210', email: 'smoke@example.com', service: 'ac-service', region: 'goa', location: 'Panaji', message: 'Smoke test', consent: true };
+  const postC = (body, headers = {}) =>
+    fetch(`${baseC}/api/enquiries`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', Origin: baseC, ...headers },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+  const codeOf = async (r) => (await r.json().catch(() => ({}))).code;
+
+  let r = await postC({ ...validEnquiry, _t: tokenC });
+  check('submitted within 3 s of loading → 400 too_fast (not stored)', r.status === 400 && (await codeOf(r)) === 'too_fast', String(r.status));
+  r = await postC({ ...validEnquiry, _t: `${Date.now() - 10000}.forgedsignature` });
+  check('forged form token → 400 token', r.status === 400 && (await codeOf(r)) === 'token', String(r.status));
+  r = await postC({ ...validEnquiry, _t: tokenC }, { Origin: 'https://evil.example' });
+  check('cross-origin JSON POST → 403 origin', r.status === 403 && (await codeOf(r)) === 'origin', String(r.status));
+  r = await fetch(`${baseC}/api/enquiries`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ ...validEnquiry, _t: tokenC }) });
+  check('POST with no Origin / Sec-Fetch-Site → 403', r.status === 403, String(r.status));
+  r = await postC('{"name": broken json');
+  check('malformed JSON → 400 bad_request', r.status === 400 && (await codeOf(r)) === 'bad_request', String(r.status));
+  r = await postC('[1,2,3]');
+  check('JSON array body → 400 bad_request', r.status === 400, String(r.status));
+  r = await postC({ ...validEnquiry, name: { nested: true }, _t: tokenC });
+  check('nested object in a field → 400 bad_request', r.status === 400, String(r.status));
+  r = await postC({ ...validEnquiry, message: 'x'.repeat(20000), _t: tokenC });
+  check('oversized body (>16 KB) → 413', r.status === 413, String(r.status));
+  r = await postC({ ...validEnquiry, hp_company: 'http://spam.example', _t: tokenC });
+  check('honeypot filled → 400 rejected (honest, not fake success)', r.status === 400 && (await codeOf(r)) === 'rejected', String(r.status));
+  r = await postC('name=x', { 'Content-Type': 'text/plain' });
+  check('unsupported content type → 415', r.status === 415, String(r.status));
+  r = await fetch(`${baseC}/api/enquiries`);
+  check('GET /api/enquiries → 405 (no public read access)', r.status === 405, String(r.status));
+  check('nothing stored by any rejected request', countC() === 0, `${countC()} rows`);
+
+  await new Promise((res) => setTimeout(res, 3200)); // let the token age past the 3 s minimum
+  const formPost = await fetch(`${baseC}/api/enquiries`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: baseC },
+    body: new URLSearchParams({ ...validEnquiry, consent: 'on', name: 'Form Post Customer', _t: tokenC }).toString(),
+  });
+  const formLoc = formPost.headers.get('location') ?? '';
+  check('no-JS form post → 303 to /contact?enquiry=sent&ref=…', formPost.status === 303 && /^\/contact\?enquiry=sent&ref=ENQ-\d{8}-[0-9A-F]{6}#enquiry$/.test(formLoc), `${formPost.status} ${formLoc}`);
+  const acceptedJson = [];
+  for (let i = 0; i < 4; i++) acceptedJson.push(await postC({ ...validEnquiry, name: `Smoke Customer ${i}`, _t: tokenC }));
+  check('4 valid JSON submissions → 201 with references', acceptedJson.every((x) => x.status === 201), acceptedJson.map((x) => x.status).join(','));
+  const limited = await postC({ ...validEnquiry, name: 'Over Limit', _t: tokenC });
+  check('6th submission in 10 min from one address → 429 with Retry-After', limited.status === 429 && Number(limited.headers.get('retry-after')) > 0, `${limited.status} retry-after=${limited.headers.get('retry-after')}`);
+  check('exactly the 5 accepted enquiries are stored', countC() === 5, `${countC()} rows`);
+  check('stored with consent text and status "new"', countC("consent = 1 AND consent_text LIKE 'I agree%' AND status = 'new'") === 5);
+  const closed = await fetch(`${base}/api/enquiries`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', Origin: base },
+    body: JSON.stringify({ ...validEnquiry, _t: tokenC }),
+  });
+  check('closed server (ENQUIRIES_ENABLED unset) → 503 disabled', closed.status === 503 && (await codeOf(closed)) === 'disabled', String(closed.status));
+
+  // Retention: an old resolved enquiry is reported, and deleted only after confirmation of the previewed count.
+  {
+    const d = new DatabaseSync(join(C.storage, 'vk-solar.db'));
+    const old = new Date(Date.now() - 400 * 86400000).toISOString();
+    d.prepare(
+      "INSERT INTO enquiries (reference, created_at, updated_at, name, phone, service, location, consent, consent_text, status, resolved_at) VALUES ('ENQ-20240101-AAAAAA', ?, ?, 'Old Resolved', '9876543210', 'ac-service', 'Panaji', 1, 'test', 'resolved', ?)",
+    ).run(old, old, old);
+    d.close();
+  }
+  const credsC = JSON.parse(readFileSync(join(C.storage, 'test-admin.json'), 'utf8'));
+  const sc = cookieOf(await login(baseC, credsC.username, credsC.password), 'vk_admin_session');
+  const settingsPage = await fetch(`${baseC}/admin/enquiries/settings`, { headers: { Cookie: `vk_admin_session=${sc.value}` } });
+  const settingsHtml = await settingsPage.text();
+  check('settings shows 1 resolved enquiry past the 365-day policy', settingsHtml.includes('1 resolved enquiry was resolved more than 365 days ago'));
+  const csrfC = tokenIn(settingsHtml);
+  const purgeTooFew = await fetch(`${baseC}/admin/enquiries/settings`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: baseC, Cookie: `vk_admin_session=${sc.value}` },
+    body: formBody({ _csrf: csrfC, _action: 'purge', expected: '0' }),
+  });
+  check('purge refused when more rows match than were previewed', purgeTooFew.status === 422 && countC() === 6, `${purgeTooFew.status}, ${countC()} rows`);
+  const purge = await fetch(`${baseC}/admin/enquiries/settings`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: baseC, Cookie: `vk_admin_session=${sc.value}` },
+    body: formBody({ _csrf: csrfC, _action: 'purge', expected: '1' }),
+  });
+  check('purge with the previewed count deletes only the old resolved enquiry', purge.status === 303 && countC() === 5 && countC("reference = 'ENQ-20240101-AAAAAA'") === 0, `${purge.status}, ${countC()} rows`);
+  {
+    const d = new DatabaseSync(join(C.storage, 'vk-solar.db'), { readOnly: true });
+    const row = d.prepare("SELECT detail FROM audit_log WHERE action = 'enquiry.retention_purge' ORDER BY id DESC").get();
+    d.close();
+    check('retention purge recorded in the audit log', !!row && JSON.parse(row.detail).deleted === 1);
+  }
+
+  // Enquiries survive a restart.
+  const exitedC = exited(c.child);
+  c.child.kill();
+  await exitedC;
+  const c2 = startServer(C.port, C.storage, { KEEP_STORAGE: 'true', ENQUIRIES_ENABLED: 'true', TEST_ACCEPT_ENQUIRIES: 'true' });
+  servers.push(c2.child);
+  await c2.ready;
+  const inbox = await fetch(`${baseC}/admin/enquiries?q=Form%20Post%20Customer`, { headers: { Cookie: `vk_admin_session=${sc.value}` } });
+  const inboxHtml = await inbox.text();
+  check('after restart: enquiries still stored and visible in the inbox', countC() === 5 && inbox.status === 200 && inboxHtml.includes('Form Post Customer'), `${countC()} rows, ${inbox.status}`);
+
   // ---- Persistence across a server restart (before the lockout test, which would also persist)
   const sp = cookieOf(await login(base, creds.username, creds.password), 'vk_admin_session');
   const authHeaders = { ...FORM, Cookie: `vk_admin_session=${sp.value}` };
@@ -227,7 +345,7 @@ try {
   const exits = servers.map(exited);
   for (const c of servers) c.kill();
   await Promise.all(exits);
-  for (const s of [A.storage, B.storage]) rmSync(s, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  for (const s of [A.storage, B.storage, C.storage]) rmSync(s, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }
 
 for (const r of results) console.log(r.line);

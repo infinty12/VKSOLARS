@@ -8,7 +8,6 @@ import { services, serviceHref } from '../data/services';
 const year = new Date().getFullYear();
 const tel = telLink();
 const wa = whatsappLink();
-const confirmed = site.serviceAreas.confirmed;
 const socialLabels: Record<string, string> = {
   linkedin: 'LinkedIn',
   instagram: 'Instagram',
@@ -59,19 +58,10 @@ const socialLabels: Record<string, string> = {
       </nav>
 
       <div class="site-footer__col">
-        <h2 class="site-footer__heading">Service area</h2>
-        {
-          confirmed.length > 0 ? (
-            <ul role="list">
-              {confirmed.slice(0, 6).map((c) => (
-                <li>{c.name}</li>
-              ))}
-            </ul>
-          ) : (
-            <p>Industrial and commercial sites across {site.region}.</p>
-          )
-        }
-        <p><a href="/service-areas">Check availability for your location</a></p>
+        <h2 class="site-footer__heading">Service areas</h2>
+        <!-- Static on every page, so it links to the live, database-backed list instead of repeating it. -->
+        <p>Coverage is confirmed location by location.</p>
+        <p><a href="/service-areas">See where we provide service</a></p>
 
         <h2 class="site-footer__heading site-footer__heading--spaced">Get in touch</h2>
         <ul role="list" class="site-footer__contact">

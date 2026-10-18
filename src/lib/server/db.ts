@@ -42,15 +42,24 @@ export function migrate(conn: DatabaseSync): number[] {
   const applied: number[] = [];
   for (const m of MIGRATIONS) {
     if (m.id <= current) continue;
+    // Table rebuilds must run with FK enforcement off (it can only be changed outside a
+    // transaction), otherwise dropping the old table would cascade-delete referencing rows.
+    if (m.rebuildsTables) conn.exec('PRAGMA foreign_keys = OFF');
     conn.exec('BEGIN IMMEDIATE');
     try {
       conn.exec(m.sql);
+      if (m.rebuildsTables) {
+        const broken = conn.prepare('PRAGMA foreign_key_check').all();
+        if (broken.length) throw new Error(`foreign key check failed (${broken.length} row(s))`);
+      }
       conn.prepare('INSERT INTO schema_migrations (id, name, applied_at) VALUES (?, ?, ?)').run(m.id, m.name, nowIso());
       conn.exec('COMMIT');
       applied.push(m.id);
     } catch (err) {
       conn.exec('ROLLBACK');
       throw new Error(`Migration ${m.id} (${m.name}) failed: ${(err as Error).message}`, { cause: err });
+    } finally {
+      if (m.rebuildsTables) conn.exec('PRAGMA foreign_keys = ON');
     }
   }
   return applied;

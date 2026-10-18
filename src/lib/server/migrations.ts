@@ -8,6 +8,12 @@ export interface Migration {
   id: number;
   name: string;
   sql: string;
+  /**
+   * Run with foreign-key enforcement off (required when rebuilding a table that other tables
+   * reference: dropping it with enforcement on would fire ON DELETE CASCADE). The runner checks
+   * PRAGMA foreign_key_check before committing.
+   */
+  rebuildsTables?: boolean;
 }
 
 const regionRows = REGIONS.map(
@@ -130,6 +136,73 @@ export const MIGRATIONS: Migration[] = [
         body TEXT NOT NULL,
         created_at TEXT NOT NULL
       );
+      CREATE INDEX idx_notes_enquiry ON enquiry_notes(enquiry_id);
+    `,
+  },
+  {
+    id: 4,
+    name: 'never reuse ids of deleted locations, enquiries and notes (AUTOINCREMENT)',
+    // Without AUTOINCREMENT SQLite reuses the highest id after a delete, so a stale admin link or
+    // audit-log entry for a deleted enquiry could point at a different person's enquiry.
+    rebuildsTables: true,
+    sql: `
+      CREATE TABLE service_locations_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        region_id INTEGER NOT NULL REFERENCES service_regions(id),
+        district TEXT NOT NULL DEFAULT '',
+        city TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL CHECK (status IN ('available', 'limited', 'planned', 'unconfirmed')),
+        services TEXT NOT NULL DEFAULT '[]',
+        note TEXT NOT NULL DEFAULT '',
+        published INTEGER NOT NULL DEFAULT 0 CHECK (published IN (0, 1)),
+        dedupe_key TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        CHECK (NOT (published = 1 AND status = 'unconfirmed'))
+      );
+      INSERT INTO service_locations_new (id, region_id, district, city, status, services, note, published, dedupe_key, created_at, updated_at)
+        SELECT id, region_id, district, city, status, services, note, published, dedupe_key, created_at, updated_at FROM service_locations;
+      DROP TABLE service_locations;
+      ALTER TABLE service_locations_new RENAME TO service_locations;
+      CREATE INDEX idx_locations_region ON service_locations(region_id);
+      CREATE INDEX idx_locations_public ON service_locations(published, status);
+
+      CREATE TABLE enquiries_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reference TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        email TEXT NOT NULL DEFAULT '',
+        service TEXT NOT NULL,
+        region_id INTEGER REFERENCES service_regions(id),
+        location TEXT NOT NULL,
+        message TEXT NOT NULL DEFAULT '',
+        consent INTEGER NOT NULL CHECK (consent = 1),
+        consent_text TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'in_progress', 'resolved')),
+        resolved_at TEXT
+      );
+      INSERT INTO enquiries_new (id, reference, created_at, updated_at, name, phone, email, service, region_id, location, message, consent, consent_text, status, resolved_at)
+        SELECT id, reference, created_at, updated_at, name, phone, email, service, region_id, location, message, consent, consent_text, status, resolved_at FROM enquiries;
+
+      CREATE TABLE enquiry_notes_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        enquiry_id INTEGER NOT NULL REFERENCES enquiries(id) ON DELETE CASCADE,
+        author_id INTEGER REFERENCES admin_users(id) ON DELETE SET NULL,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      INSERT INTO enquiry_notes_new (id, enquiry_id, author_id, body, created_at)
+        SELECT id, enquiry_id, author_id, body, created_at FROM enquiry_notes;
+
+      DROP TABLE enquiry_notes;
+      DROP TABLE enquiries;
+      ALTER TABLE enquiries_new RENAME TO enquiries;
+      ALTER TABLE enquiry_notes_new RENAME TO enquiry_notes;
+      CREATE INDEX idx_enquiries_created ON enquiries(created_at);
+      CREATE INDEX idx_enquiries_status ON enquiries(status, created_at);
       CREATE INDEX idx_notes_enquiry ON enquiry_notes(enquiry_id);
     `,
   },

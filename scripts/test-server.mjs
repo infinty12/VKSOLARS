@@ -27,6 +27,12 @@ process.env.STORAGE_DIR = storage;
 
 const { getDb } = await import('../src/lib/server/db.ts');
 getDb();
+// Test-only: pre-enable the admin "Accept enquiries" switch (the ENQUIRIES_ENABLED server switch
+// must still be set separately). Only reachable here, behind the test-folder-name check above.
+if ((process.env.TEST_ACCEPT_ENQUIRIES ?? '').toLowerCase() === 'true') {
+  const { setSetting } = await import('../src/lib/server/settings.ts');
+  setSetting('enquiries.accept', true);
+}
 if (!keep) {
   const { createAdmin } = await import('../src/lib/server/auth.ts');
   const credentials = { username: 'test-admin', password: randomBytes(18).toString('base64url') };

@@ -33,14 +33,6 @@ export interface TeamMember {
   photo?: string;
 }
 
-export interface ServiceCity {
-  name: string;
-  district?: string;
-  /** Real coordinates of the city, used to place its pin on the Rajasthan map. */
-  coords?: { lat: number; lon: number };
-  note?: string;
-}
-
 const env = import.meta.env;
 
 export const site = {
@@ -77,11 +69,8 @@ export const site = {
     youtube: null as string | null,
   },
 
-  form: {
-    /** Web3Forms access key from PUBLIC_WEB3FORMS_KEY. null → form shows "not configured". */
-    web3formsKey: (env.PUBLIC_WEB3FORMS_KEY as string | undefined) || null,
-    endpoint: 'https://api.web3forms.com/submit',
-  },
+  // Enquiries are stored in the local database via POST /api/enquiries and read in the admin
+  // inbox. Submissions are off unless ENQUIRIES_ENABLED=true and the admin setting is on.
 
   /** Verified company figures only. Empty → statistics section is hidden. */
   stats: [] as Stat[],
@@ -98,10 +87,8 @@ export const site = {
   /** Year the company was founded, once confirmed. */
   founded: null as number | null,
 
-  serviceAreas: {
-    /** Cities with CONFIRMED service coverage. Empty → map shows no coverage pins. */
-    confirmed: [] as ServiceCity[],
-  },
+  // Service coverage is NOT configured here: it is managed in the admin panel (Service Areas)
+  // and stored in the database, so it can be published without code changes.
 } as const;
 
 export const hasPhone = Boolean(site.contact.phone);

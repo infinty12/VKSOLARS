@@ -69,7 +69,9 @@ test.describe('responsive layout', () => {
 
       const buttons = await page.evaluate(() =>
         Array.from(document.querySelectorAll<HTMLElement>('.btn, button:not(.gallery__thumb), input:not([type=hidden]):not([type=checkbox]), select'))
-          .filter((el) => el.offsetParent !== null)
+          // Same exclusion as the target-size check above: the off-screen, aria-hidden spam trap
+          // is not a control anyone can see or reach.
+          .filter((el) => el.offsetParent !== null && !el.closest('.enquiry__trap'))
           .map((el) => ({ el, h: el.getBoundingClientRect().height }))
           .filter(({ h }) => h < 44)
           .map(({ el, h }) => `${el.tagName}.${el.className} ${Math.round(h)}px`),

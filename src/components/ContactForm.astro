@@ -1,13 +1,28 @@
 ---
+// Enquiry form → POST /api/enquiries (stored in the local database, shown in the admin inbox).
+// Works without JavaScript (normal form post + redirect); the script adds inline validation,
+// in-page status and a duplicate-submission guard.
 import Icon from './Icon.astro';
 import { site, telLink, whatsappLink } from '../config/site';
 import { services } from '../data/services';
-import { LIMITS } from '../lib/enquiry';
+import { LIMITS, CONSENT_TEXT, HONEYPOT_FIELD } from '../lib/enquiry';
 
-const key = site.form.web3formsKey;
+interface Props {
+  /** Whether submissions are accepted (both the server switch and the admin setting are on). */
+  open: boolean;
+  /** Signed form token issued by the server for this page view. */
+  token: string;
+  regions: { code: string; name: string; type: 'state' | 'ut' }[];
+  /** Result of a no-JS submission, from the redirect's query string. */
+  result?: { kind: 'success' | 'error'; message: string } | null;
+}
+
+const { open, token, regions, result = null } = Astro.props;
 const tel = telLink();
 const wa = whatsappLink();
 const serviceOptions = [...services.map((s) => ({ value: s.slug, label: s.title })), { value: 'not-sure', label: 'Not sure — please recommend' }];
+const states = regions.filter((r) => r.type === 'state');
+const uts = regions.filter((r) => r.type === 'ut');
 const fallback = tel
   ? `Please call us on ${site.contact.phoneDisplay ?? site.contact.phone}`
   : wa
@@ -19,32 +34,29 @@ const fallback = tel
 
 <form
   class="enquiry"
-  action={site.form.endpoint}
+  action="/api/enquiries"
   method="post"
   novalidate
   data-enquiry
-  data-endpoint={site.form.endpoint}
-  data-configured={key ? 'true' : 'false'}
+  data-configured={open ? 'true' : 'false'}
   data-services={JSON.stringify(serviceOptions.map((o) => o.value))}
+  data-regions={JSON.stringify(regions.map((r) => r.code))}
   data-fallback={fallback ?? ''}
   aria-describedby="enquiry-required-note"
 >
-  {key && <input type="hidden" name="access_key" value={key} />}
-  <input type="hidden" name="subject" value={`New enquiry — ${site.shortName} website`} />
-  <input type="hidden" name="from_name" value={`${site.shortName} website`} />
+  <input type="hidden" name="_t" value={token} />
 
-  <!-- Spam trap: hidden from people, often filled in by bots. Web3Forms rejects submissions where it is checked. -->
+  <!-- Spam trap: hidden from people (and from assistive technology), often filled in by bots. -->
   <div class="enquiry__trap" aria-hidden="true">
-    <label>Leave this box unchecked <input type="checkbox" name="botcheck" tabindex="-1" /></label>
+    <label>Company website (leave empty) <input type="text" name={HONEYPOT_FIELD} tabindex="-1" autocomplete="off" /></label>
   </div>
 
   {
-    !key && (
+    !open && (
       <div class="enquiry__unconfigured" role="note" data-unconfigured>
         <Icon name="info" size={20} />
         <p>
-          <strong>Online enquiries are not active yet.</strong> This form is not connected to an inbox, so it cannot send
-          messages.
+          <strong>Online enquiries are not active yet.</strong> This form cannot send messages at the moment.
           {fallback ? ` ${fallback}.` : ' Please check back soon.'}
         </p>
       </div>
@@ -61,48 +73,21 @@ const fallback = tel
   <div class="enquiry__grid">
     <div class="field">
       <label for="f-name">Full name <span class="field__req" aria-hidden="true">*</span></label>
-      <input
-        id="f-name"
-        name="name"
-        type="text"
-        autocomplete="name"
-        required
-        minlength={LIMITS.nameMin}
-        maxlength={LIMITS.nameMax}
-        aria-describedby="f-name-error"
-      />
+      <input id="f-name" name="name" type="text" autocomplete="name" required minlength={LIMITS.nameMin} maxlength={LIMITS.nameMax} aria-describedby="f-name-error" />
       <p class="field__error" id="f-name-error" data-error-for="name"></p>
     </div>
 
     <div class="field">
       <label for="f-phone">Phone number <span class="field__req" aria-hidden="true">*</span></label>
-      <input
-        id="f-phone"
-        name="phone"
-        type="tel"
-        inputmode="tel"
-        autocomplete="tel"
-        required
-        maxlength="20"
-        aria-describedby="f-phone-hint f-phone-error"
-      />
+      <input id="f-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required maxlength={LIMITS.phoneMax} aria-describedby="f-phone-hint f-phone-error" />
       <p class="field__hint" id="f-phone-hint">Mobile or landline, e.g. 98765 43210</p>
       <p class="field__error" id="f-phone-error" data-error-for="phone"></p>
     </div>
 
     <div class="field">
-      <label for="f-location">Site location <span class="field__req" aria-hidden="true">*</span></label>
-      <input
-        id="f-location"
-        name="location"
-        type="text"
-        autocomplete="address-level2"
-        required
-        maxlength={LIMITS.locationMax}
-        aria-describedby="f-location-hint f-location-error"
-      />
-      <p class="field__hint" id="f-location-hint">City, town or industrial area in Rajasthan</p>
-      <p class="field__error" id="f-location-error" data-error-for="location"></p>
+      <label for="f-email">Email address <span class="field__optional">(optional)</span></label>
+      <input id="f-email" name="email" type="email" inputmode="email" autocomplete="email" maxlength={LIMITS.emailMax} aria-describedby="f-email-error" />
+      <p class="field__error" id="f-email-error" data-error-for="email"></p>
     </div>
 
     <div class="field">
@@ -117,19 +102,42 @@ const fallback = tel
       <p class="field__error" id="f-service-error" data-error-for="service"></p>
     </div>
 
+    <div class="field">
+      <label for="f-region">State or union territory <span class="field__req" aria-hidden="true">*</span></label>
+      <div class="field__select">
+        <select id="f-region" name="region" required autocomplete="address-level1" aria-describedby="f-region-error">
+          <option value="">Select…</option>
+          <optgroup label="States">{states.map((r) => <option value={r.code}>{r.name}</option>)}</optgroup>
+          <optgroup label="Union territories">{uts.map((r) => <option value={r.code}>{r.name}</option>)}</optgroup>
+        </select>
+        <Icon name="chevronRight" size={18} class="field__chevron" />
+      </div>
+      <p class="field__error" id="f-region-error" data-error-for="region"></p>
+    </div>
+
+    <div class="field">
+      <label for="f-location">Site location <span class="field__req" aria-hidden="true">*</span></label>
+      <input id="f-location" name="location" type="text" autocomplete="address-level2" required maxlength={LIMITS.locationMax} aria-describedby="f-location-hint f-location-error" />
+      <p class="field__hint" id="f-location-hint">City, town or industrial area</p>
+      <p class="field__error" id="f-location-error" data-error-for="location"></p>
+    </div>
+
     <div class="field field--full">
       <label for="f-message">Message <span class="field__optional">(optional)</span></label>
-      <textarea
-        id="f-message"
-        name="message"
-        rows="5"
-        maxlength={LIMITS.messageMax}
-        aria-describedby="f-message-hint f-message-error"></textarea>
+      <textarea id="f-message" name="message" rows="5" maxlength={LIMITS.messageMax} aria-describedby="f-message-hint f-message-error"></textarea>
       <p class="field__hint" id="f-message-hint">
         Tell us about your system size, rooftop or ground-mount, and any issues you’ve noticed.
         <span class="field__count mono" data-count aria-live="polite">0 / {LIMITS.messageMax}</span>
       </p>
       <p class="field__error" id="f-message-error" data-error-for="message"></p>
+    </div>
+
+    <div class="field field--full">
+      <label class="field__consent">
+        <input type="checkbox" name="consent" value="on" required aria-describedby="f-consent-error" />
+        <span>{CONSENT_TEXT} <span class="field__req" aria-hidden="true">*</span></span>
+      </label>
+      <p class="field__error" id="f-consent-error" data-error-for="consent"></p>
     </div>
   </div>
 
@@ -142,17 +150,26 @@ const fallback = tel
     <p class="enquiry__privacy">We use your details only to respond to this enquiry.</p>
   </div>
 
-  <div class="enquiry__status" data-status role="status" aria-live="polite" tabindex="-1"></div>
+  <div
+    class:list={['enquiry__status', result && `enquiry__status--${result.kind}`]}
+    data-status
+    role="status"
+    aria-live="polite"
+    tabindex="-1"
+  >
+    {result && <strong>{result.message}</strong>}
+  </div>
 </form>
 
 <script>
-  import { validateEnquiry, type EnquiryValues, type EnquiryErrors } from '../lib/enquiry';
+  import { validateEnquiry, normaliseEnquiry, HONEYPOT_FIELD, type EnquiryValues, type EnquiryErrors } from '../lib/enquiry';
 
   const TIMEOUT_MS = 15000;
+  const FIELDS = ['name', 'phone', 'email', 'service', 'region', 'location', 'message', 'consent'] as const;
 
   document.querySelectorAll<HTMLFormElement>('[data-enquiry]').forEach((form) => {
     const serviceSlugs: string[] = JSON.parse(form.dataset.services ?? '[]');
-    const endpoint = form.dataset.endpoint ?? '';
+    const regionCodes: string[] = JSON.parse(form.dataset.regions ?? '[]');
     const fallback = form.dataset.fallback ?? '';
     const summary = form.querySelector<HTMLElement>('[data-error-summary]')!;
     const summaryList = form.querySelector<HTMLElement>('[data-error-list]')!;
@@ -161,26 +178,29 @@ const fallback = tel
     const submitLabel = form.querySelector<HTMLElement>('[data-submit-label]')!;
     const message = form.querySelector<HTMLTextAreaElement>('[name="message"]')!;
     const counter = form.querySelector<HTMLElement>('[data-count]');
-    const fields = ['name', 'phone', 'location', 'service', 'message'] as const;
     const touched = new Set<string>();
+    const opts = { serviceSlugs, regionCodes };
     let submitting = false;
+
+    const control = (name: string) => form.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[name="${name}"]`)!;
+    const consentBox = control('consent') as HTMLInputElement;
 
     // Pre-fill from the URL, e.g. /contact?service=ac-service&location=Jaipur
     const params = new URLSearchParams(window.location.search);
     const preService = params.get('service');
     const preLocation = params.get('location');
-    const serviceSelect = form.querySelector<HTMLSelectElement>('[name="service"]')!;
-    if (preService && serviceSlugs.includes(preService)) serviceSelect.value = preService;
-    if (preLocation) form.querySelector<HTMLInputElement>('[name="location"]')!.value = preLocation.slice(0, 120);
+    if (preService && serviceSlugs.includes(preService)) control('service').value = preService;
+    if (preLocation) control('location').value = preLocation.slice(0, 120);
 
-    const control = (name: string) => form.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[name="${name}"]`)!;
-
-    const values = (): EnquiryValues => ({
+    const rawValues = (): EnquiryValues => ({
       name: control('name').value,
       phone: control('phone').value,
-      location: control('location').value,
+      email: control('email').value,
       service: control('service').value,
+      region: control('region').value,
+      location: control('location').value,
       message: control('message').value,
+      consent: consentBox.checked,
     });
 
     const showFieldError = (name: string, text?: string) => {
@@ -192,33 +212,49 @@ const fallback = tel
     };
 
     const renderErrors = (errors: EnquiryErrors, only?: string) => {
-      fields.forEach((f) => {
-        if (only && f !== only) return;
-        showFieldError(f, errors[f]);
+      FIELDS.forEach((f) => {
+        if (!only || f === only) showFieldError(f, errors[f]);
       });
     };
 
-    const setStatus = (kind: 'success' | 'error' | 'info' | '', html: string) => {
+    const setStatus = (kind: 'success' | 'error' | 'info' | '', text: string) => {
       status.className = `enquiry__status${kind ? ` enquiry__status--${kind}` : ''}`;
-      status.innerHTML = html;
+      status.replaceChildren();
+      if (text) {
+        const strong = document.createElement('strong');
+        strong.textContent = text; // textContent only — never inject markup
+        status.append(strong);
+      }
     };
 
-    const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const showSummary = (errors: EnquiryErrors) => {
+      const entries = Object.entries(errors) as [string, string][];
+      summaryList.replaceChildren(
+        ...entries.map(([f, msg]) => {
+          const li = document.createElement('li');
+          const a = document.createElement('a');
+          a.href = `#${control(f).id}`;
+          a.textContent = msg;
+          li.append(a);
+          return li;
+        }),
+      );
+      summary.hidden = entries.length === 0;
+      if (entries.length) summary.focus();
+    };
 
-    // Validate a field once the user has finished with it, then live while they correct it.
-    fields.forEach((f) => {
+    FIELDS.forEach((f) => {
       const el = control(f);
       el.addEventListener('blur', () => {
-        if (!el.value && f !== 'service') return;
+        if (f !== 'consent' && !el.value && f !== 'service' && f !== 'region') return;
         touched.add(f);
-        renderErrors(validateEnquiry(values(), serviceSlugs), f);
+        renderErrors(validateEnquiry(normaliseEnquiry(rawValues()), opts), f);
       });
-      el.addEventListener('input', () => {
-        if (touched.has(f)) renderErrors(validateEnquiry(values(), serviceSlugs), f);
-      });
-      el.addEventListener('change', () => {
-        if (touched.has(f)) renderErrors(validateEnquiry(values(), serviceSlugs), f);
-      });
+      const live = () => {
+        if (touched.has(f)) renderErrors(validateEnquiry(normaliseEnquiry(rawValues()), opts), f);
+      };
+      el.addEventListener('input', live);
+      el.addEventListener('change', live);
     });
 
     const updateCount = () => {
@@ -239,70 +275,61 @@ const fallback = tel
       event.preventDefault();
       if (submitting) return; // prevent duplicate submissions
 
-      const data = values();
-      const errors = validateEnquiry(data, serviceSlugs);
-      fields.forEach((f) => touched.add(f));
+      const values = normaliseEnquiry(rawValues());
+      const errors = validateEnquiry(values, opts);
+      FIELDS.forEach((f) => touched.add(f));
       renderErrors(errors);
-
-      const entries = Object.entries(errors) as [keyof EnquiryValues, string][];
-      if (entries.length) {
-        summaryList.innerHTML = entries
-          .map(([f, msg]) => `<li><a href="#${control(f).id}">${escapeHtml(msg)}</a></li>`)
-          .join('');
-        summary.hidden = false;
+      if (Object.keys(errors).length) {
         setStatus('', '');
-        summary.focus();
+        showSummary(errors);
         return;
       }
       summary.hidden = true;
 
-      // Read at submit time (not page load) so tests can exercise the connected state with a mocked endpoint.
       if (form.dataset.configured !== 'true') {
-        setStatus(
-          'error',
-          `<strong>The online form isn’t connected yet, so your message was not sent.</strong> ${
-            fallback ? `${escapeHtml(fallback)} instead.` : 'Please try again later.'
-          }`,
-        );
+        setStatus('error', `Online enquiries are not active yet, so your message was not sent.${fallback ? ` ${fallback} instead.` : ''}`);
         status.focus();
         return;
       }
 
       setBusy(true);
       setStatus('info', 'Sending your enquiry…');
-
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), TIMEOUT_MS);
       try {
-        const payload = Object.fromEntries(new FormData(form).entries());
-        payload.phone = data.phone.trim();
-        payload.service = serviceSelect.selectedOptions[0]?.textContent ?? data.service;
-        const response = await fetch(endpoint, {
+        const response = await fetch(form.action, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            ...values,
+            _t: control('_t').value,
+            [HONEYPOT_FIELD]: control(HONEYPOT_FIELD).value,
+          }),
           signal: controller.signal,
         });
-        const result = (await response.json().catch(() => null)) as { success?: boolean; message?: string } | null;
+        const result = (await response.json().catch(() => null)) as
+          | { ok: boolean; reference?: string; message?: string; errors?: EnquiryErrors }
+          | null;
 
-        if (response.ok && result?.success) {
+        if (response.status === 201 && result?.ok) {
           form.reset();
           touched.clear();
           updateCount();
           renderErrors({});
-          setStatus(
-            'success',
-            '<strong>Thank you — your enquiry has been sent.</strong> Our team will contact you to arrange your inspection.',
-          );
+          setStatus('success', `Thank you — your enquiry has been received (reference ${result.reference}). Our team will contact you to arrange your inspection.`);
+        } else if (response.status === 422 && result?.errors) {
+          renderErrors(result.errors);
+          showSummary(result.errors);
+          setStatus('error', result.message ?? 'Please correct the highlighted fields.');
         } else {
-          throw new Error(result?.message || `Request failed (${response.status})`);
+          setStatus('error', `${result?.message ?? 'Sorry, your enquiry could not be sent.'} Your details are still in the form.`);
         }
       } catch (error) {
         const aborted = error instanceof DOMException && error.name === 'AbortError';
         setStatus(
           'error',
-          `<strong>${aborted ? 'The request timed out' : 'Sorry, your enquiry could not be sent'}.</strong> Your details are still in the form — please try again${
-            fallback ? `, or ${escapeHtml(fallback.charAt(0).toLowerCase() + fallback.slice(1))}` : ''
+          `${aborted ? 'The request timed out' : 'Sorry, your enquiry could not be sent'}. Your details are still in the form — please try again${
+            fallback ? `, or ${fallback.charAt(0).toLowerCase() + fallback.slice(1)}` : ''
           }.`,
         );
       } finally {
@@ -385,7 +412,7 @@ const fallback = tel
     color: var(--text-supporting);
   }
 
-  .field input,
+  .field input:not([type='checkbox']),
   .field select,
   .field textarea {
     width: 100%;
@@ -406,17 +433,17 @@ const fallback = tel
     min-height: 132px;
   }
 
-  .field input:hover,
+  .field input:not([type='checkbox']):hover,
   .field select:hover,
   .field textarea:hover {
-    border-color: var(--blue-500);
+    border-color: var(--brand-solar);
   }
 
-  .field input:focus-visible,
+  .field input:not([type='checkbox']):focus-visible,
   .field select:focus-visible,
   .field textarea:focus-visible {
     outline: none;
-    border-color: var(--blue-700);
+    border-color: var(--brand-solar);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-steel) 35%, transparent);
   }
 
@@ -445,6 +472,28 @@ const fallback = tel
     transform: translateY(-50%) rotate(90deg);
     color: var(--text-supporting);
     pointer-events: none;
+  }
+
+  .field__consent {
+    display: flex;
+    gap: var(--space-1-5);
+    align-items: flex-start;
+    font-weight: var(--fw-regular) !important;
+    line-height: 1.5;
+    cursor: pointer;
+  }
+
+  .field__consent input {
+    flex-shrink: 0;
+    width: 24px; /* WCAG 2.2 minimum target size */
+    height: 24px;
+    margin-top: 1px;
+    accent-color: var(--brand-solar);
+  }
+
+  .field__consent:has([aria-invalid='true']) input {
+    outline: 2px solid var(--color-error);
+    outline-offset: 2px;
   }
 
   .field__hint {
@@ -515,8 +564,8 @@ const fallback = tel
     border: 0;
     border-radius: var(--radius-md);
     background: var(--gradient-cta);
-    background-color: var(--blue-700);
-    color: var(--white);
+    background-color: var(--btn-primary-bg);
+    color: var(--btn-primary-text);
     font-family: var(--font-heading);
     font-size: var(--fs-md);
     font-weight: var(--fw-semibold);
@@ -528,7 +577,7 @@ const fallback = tel
 
   .enquiry__submit:hover {
     box-shadow: var(--shadow-md);
-    background-image: linear-gradient(90deg, var(--blue-700), var(--navy-900));
+    background: var(--btn-primary-bg-hover);
   }
 
   .enquiry__submit:active {
@@ -593,8 +642,8 @@ const fallback = tel
   }
 
   .enquiry__status:global(.enquiry__status--info) {
-    background: var(--sky-50);
-    border-color: var(--color-border-strong);
-    color: var(--blue-700);
+    background: var(--ice-100);
+    border-color: var(--brand-steel);
+    color: var(--brand-solar);
   }
 </style>

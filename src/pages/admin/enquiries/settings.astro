@@ -1,0 +1,180 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Csrf from '../../../components/admin/Csrf.astro';
+import { enquiryGates, getSetting, setSetting } from '../../../lib/server/settings.ts';
+import { countPastRetention, purgePastRetention } from '../../../lib/server/enquiries.ts';
+import { audit } from '../../../lib/server/audit.ts';
+import { flashFrom } from '../../../lib/server/http.ts';
+
+const RETENTION_MIN = 30;
+const RETENTION_MAX = 3650;
+const userId = Astro.locals.admin!.user.id;
+let actionError: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('_action') ?? '');
+  if (action === 'accept') {
+    const accept = form.get('accept') === 'on';
+    setSetting('enquiries.accept', accept);
+    audit('settings.enquiries_accept', { userId, detail: { accept } });
+    return Astro.redirect('/admin/enquiries/settings?msg=saved', 303);
+  } else if (action === 'retention') {
+    const days = Number(form.get('retentionDays'));
+    if (!Number.isInteger(days) || days < RETENTION_MIN || days > RETENTION_MAX) {
+      actionError = `Retention must be a whole number of days between ${RETENTION_MIN} and ${RETENTION_MAX}.`;
+    } else {
+      setSetting('enquiries.retentionDays', days);
+      audit('settings.enquiries_retention', { userId, detail: { days } });
+      return Astro.redirect('/admin/enquiries/settings?msg=saved#retention', 303);
+    }
+  } else if (action === 'purge') {
+    const days = getSetting('enquiries.retentionDays');
+    // The form states the count it expects; refuse if more would be deleted than the admin saw.
+    const expected = Number(form.get('expected'));
+    const current = countPastRetention(days);
+    if (current > expected) {
+      actionError = `${current} enquiries now match (more than the ${expected} you reviewed). Nothing was deleted — please review again.`;
+    } else {
+      purgePastRetention(days, userId);
+      return Astro.redirect(`/admin/enquiries/settings?msg=purged#retention`, 303);
+    }
+  } else {
+    actionError = 'Unknown action.';
+  }
+  Astro.response.status = 422;
+}
+
+const gates = enquiryGates();
+const retentionDays = getSetting('enquiries.retentionDays');
+const pastRetention = countPastRetention(retentionDays);
+const flash = actionError ? { kind: 'error' as const, text: actionError } : flashFrom(Astro.url);
+---
+
+<AdminLayout title="Enquiry settings" crumbs={[{ label: 'Enquiries', href: '/admin/enquiries' }, { label: 'Settings' }]} flash={flash}>
+  <section class="admin-card set-card" aria-labelledby="accept-title">
+    <h2 id="accept-title">Public submissions</h2>
+    <p>The contact form accepts enquiries only when <strong>both</strong> switches are on:</p>
+    <ul role="list" class="set-gates">
+      <li>
+        <span class:list={['admin-badge', gates.env ? 'admin-badge--on' : 'admin-badge--off']}>{gates.env ? 'On' : 'Off'}</span>
+        <span>
+          <strong>Server switch</strong> — the <code>ENQUIRIES_ENABLED</code> environment variable. Set by whoever runs the server; it
+          can’t be changed here.
+        </span>
+      </li>
+      <li>
+        <span class:list={['admin-badge', gates.admin ? 'admin-badge--on' : 'admin-badge--off']}>{gates.admin ? 'On' : 'Off'}</span>
+        <span><strong>Admin switch</strong> — below.</span>
+      </li>
+    </ul>
+    <p class="set-result" role="status">
+      Result:
+      {gates.open ? <strong>the form is accepting enquiries.</strong> : <strong>the form is closed and shows a “not active” notice.</strong>}
+    </p>
+    <form method="post" class="set-form">
+      <Csrf />
+      <input type="hidden" name="_action" value="accept" />
+      <label class="admin-check">
+        <input type="checkbox" name="accept" checked={gates.admin} />
+        Accept enquiries from the website contact form
+      </label>
+      {!gates.env && <p class="admin-hint">The server switch is off, so the form stays closed even if this is ticked.</p>}
+      <button type="submit" class="admin-btn admin-btn--primary">Save</button>
+    </form>
+  </section>
+
+  <section class="admin-card set-card" id="retention" aria-labelledby="retention-title">
+    <h2 id="retention-title">Retention</h2>
+    <p>
+      Policy: resolved enquiries are kept for <strong>{retentionDays} days</strong> after they are resolved. Enquiries that are New or In
+      progress are never affected. <strong>Nothing is deleted automatically</strong> — you review and delete them here.
+    </p>
+    <form method="post" class="set-form set-form--inline">
+      <Csrf />
+      <input type="hidden" name="_action" value="retention" />
+      <div class="admin-field">
+        <label for="retentionDays">Retention period (days)</label>
+        <input id="retentionDays" name="retentionDays" type="number" min={RETENTION_MIN} max={RETENTION_MAX} step="1" value={retentionDays} required />
+      </div>
+      <button type="submit" class="admin-btn admin-btn--secondary">Save period</button>
+    </form>
+
+    <div class="set-purge">
+      <p role="status">
+        {
+          pastRetention === 0 ? (
+            'No resolved enquiries are past the retention period.'
+          ) : (
+            <strong>
+              {pastRetention} resolved {pastRetention === 1 ? 'enquiry was' : 'enquiries were'} resolved more than {retentionDays} days ago.
+            </strong>
+          )
+        }
+      </p>
+      {
+        pastRetention > 0 && (
+          <form
+            method="post"
+            data-confirm={`Permanently delete ${pastRetention} resolved ${pastRetention === 1 ? 'enquiry' : 'enquiries'} (and their notes) resolved more than ${retentionDays} days ago? This cannot be undone.`}
+          >
+            <Csrf />
+            <input type="hidden" name="_action" value="purge" />
+            <input type="hidden" name="expected" value={pastRetention} />
+            <button type="submit" class="admin-btn admin-btn--danger">
+              Delete {pastRetention} old resolved {pastRetention === 1 ? 'enquiry' : 'enquiries'}
+            </button>
+          </form>
+        )
+      }
+    </div>
+  </section>
+</AdminLayout>
+
+<style>
+  .set-card {
+    max-width: 880px;
+  }
+
+  .set-card > p {
+    color: var(--text-secondary);
+  }
+
+  .set-gates {
+    display: grid;
+    gap: var(--space-1-5);
+    margin-block: var(--space-2);
+  }
+
+  .set-gates li {
+    display: flex;
+    gap: var(--space-1-5);
+    align-items: flex-start;
+  }
+
+  .set-result {
+    margin-bottom: var(--space-2);
+  }
+
+  .set-form {
+    display: grid;
+    gap: var(--space-1-5);
+    justify-items: start;
+  }
+
+  .set-form--inline {
+    grid-auto-flow: column;
+    align-items: end;
+    justify-content: start;
+    margin-top: var(--space-2);
+  }
+
+  .set-purge {
+    display: grid;
+    gap: var(--space-1-5);
+    justify-items: start;
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: var(--border-thin);
+  }
+</style>

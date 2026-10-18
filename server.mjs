@@ -24,10 +24,8 @@ const SECURITY_HEADERS = {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self'",
-    // api.web3forms.com: the current contact form still posts there (matches the previous
-    // public/_headers policy). Remove both entries when the form moves to the server endpoint.
-    "connect-src 'self' https://api.web3forms.com",
-    "form-action 'self' https://api.web3forms.com",
+    "connect-src 'self'",
+    "form-action 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "object-src 'none'",

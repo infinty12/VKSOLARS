@@ -13,6 +13,8 @@ export default [
       '.snapshot/',
       'storage/',
       'test-storage/',
+      'test-storage-*/',
+      '*-test-storage/',
     ],
   },
   ...tseslint.configs.recommended,

@@ -1,0 +1,252 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Csrf from '../../../components/admin/Csrf.astro';
+import {
+  addNote,
+  deleteEnquiry,
+  getEnquiry,
+  listNotes,
+  setEnquiryStatus,
+  ENQUIRY_STATUSES,
+  NOTE_MAX,
+  STATUS_LABELS,
+} from '../../../lib/server/enquiries.ts';
+import { flashFrom } from '../../../lib/server/http.ts';
+import { services } from '../../../data/services.ts';
+
+const id = Number(Astro.params.id);
+const userId = Astro.locals.admin!.user.id;
+let enquiry = getEnquiry(id);
+if (!enquiry) return Astro.redirect('/admin/enquiries?msg=notfound', 303);
+
+let actionError: string | null = null;
+let draftNote = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('_action') ?? '');
+  if (action === 'status') {
+    if (setEnquiryStatus(id, String(form.get('status') ?? ''), userId)) return Astro.redirect(`/admin/enquiries/${id}?msg=status`, 303);
+    actionError = 'Choose a valid status.';
+  } else if (action === 'note') {
+    draftNote = String(form.get('note') ?? '').slice(0, NOTE_MAX + 100);
+    const result = addNote(id, draftNote, userId);
+    if (result.ok) return Astro.redirect(`/admin/enquiries/${id}?msg=note#notes`, 303);
+    actionError = result.error;
+  } else if (action === 'delete') {
+    deleteEnquiry(id, userId);
+    return Astro.redirect('/admin/enquiries?msg=deleted', 303);
+  } else {
+    actionError = 'Unknown action.';
+  }
+  Astro.response.status = 422;
+  enquiry = getEnquiry(id)!;
+}
+
+const notes = listNotes(id);
+const serviceTitle: Record<string, string> = { ...Object.fromEntries(services.map((s) => [s.slug, s.title])), 'not-sure': 'Not sure — please recommend' };
+const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+const flash = actionError ? { kind: 'error' as const, text: actionError } : flashFrom(Astro.url);
+const telHref = `tel:${enquiry.phone.replace(/[^\d+]/g, '')}`;
+---
+
+<AdminLayout title={`Enquiry from ${enquiry.name}`} crumbs={[{ label: 'Enquiries', href: '/admin/enquiries' }, { label: enquiry.reference }]} flash={flash}>
+  <div class="enq-layout">
+    <section class="admin-card" aria-labelledby="details-title">
+      <h2 id="details-title">Details</h2>
+      <dl class="enq-dl">
+        <div><dt>Reference</dt><dd class="mono">{enquiry.reference}</dd></div>
+        <div><dt>Received</dt><dd>{fmt(enquiry.createdAt)}</dd></div>
+        <div><dt>Name</dt><dd>{enquiry.name}</dd></div>
+        <div><dt>Phone</dt><dd><a href={telHref}>{enquiry.phone}</a></dd></div>
+        <div><dt>Email</dt><dd>{enquiry.email ? <a href={`mailto:${enquiry.email}`}>{enquiry.email}</a> : <span class="enq-muted">Not given</span>}</dd></div>
+        <div><dt>Service</dt><dd>{serviceTitle[enquiry.service] ?? enquiry.service}</dd></div>
+        <div><dt>State / UT</dt><dd>{enquiry.regionName ?? <span class="enq-muted">Not given</span>}</dd></div>
+        <div><dt>Location</dt><dd>{enquiry.location}</dd></div>
+        <div class="enq-dl__wide"><dt>Message</dt><dd class="enq-message">{enquiry.message || <span class="enq-muted">No message</span>}</dd></div>
+        <div class="enq-dl__wide"><dt>Consent</dt><dd class="enq-consent">“{enquiry.consentText}”</dd></div>
+      </dl>
+    </section>
+
+    <div class="enq-side">
+      <section class="admin-card" aria-labelledby="status-title">
+        <h2 id="status-title">Status</h2>
+        <p class="enq-current">
+          Current: <span class:list={['admin-badge', `admin-badge--${enquiry.status}`]}>{STATUS_LABELS[enquiry.status]}</span>
+        </p>
+        {enquiry.resolvedAt && <p class="admin-hint">Resolved {fmt(enquiry.resolvedAt)}</p>}
+        <form method="post" class="enq-status-form">
+          <Csrf />
+          <input type="hidden" name="_action" value="status" />
+          <div class="admin-field">
+            <label for="status">Change status</label>
+            <select id="status" name="status">
+              {ENQUIRY_STATUSES.map((s) => <option value={s} selected={s === enquiry.status}>{STATUS_LABELS[s]}</option>)}
+            </select>
+          </div>
+          <button type="submit" class="admin-btn admin-btn--primary">Update status</button>
+        </form>
+      </section>
+
+      <section class="admin-card enq-danger" aria-labelledby="delete-title">
+        <h2 id="delete-title">Delete</h2>
+        <p class="admin-hint">Permanently removes this enquiry and its notes. Use this when you no longer need the customer’s details.</p>
+        <form method="post" data-confirm={`Permanently delete enquiry ${enquiry.reference} from ${enquiry.name}, including all notes? This cannot be undone.`}>
+          <Csrf />
+          <input type="hidden" name="_action" value="delete" />
+          <button type="submit" class="admin-btn admin-btn--danger">Delete enquiry</button>
+        </form>
+      </section>
+    </div>
+
+    <section class="admin-card enq-notes" id="notes" aria-labelledby="notes-title">
+      <h2 id="notes-title">Internal notes</h2>
+      <p class="admin-hint">Visible only to administrators. Never shown to the customer.</p>
+      {
+        notes.length === 0 ? (
+          <p class="enq-muted">No notes yet.</p>
+        ) : (
+          <ol role="list" class="enq-note-list">
+            {notes.map((n) => (
+              <li class="enq-note">
+                <p class="enq-note__meta">
+                  {n.author ?? 'Deleted user'} · {fmt(n.createdAt)}
+                </p>
+                <p class="enq-note__body">{n.body}</p>
+              </li>
+            ))}
+          </ol>
+        )
+      }
+      <form method="post" class="enq-note-form" data-unsaved-warning>
+        <Csrf />
+        <input type="hidden" name="_action" value="note" />
+        <div class="admin-field">
+          <label for="note">Add a note</label>
+          <textarea id="note" name="note" maxlength={NOTE_MAX} required>{draftNote}</textarea>
+          <p class="admin-hint">Plain text, up to {NOTE_MAX} characters.</p>
+        </div>
+        <button type="submit" class="admin-btn admin-btn--secondary">Save note</button>
+      </form>
+    </section>
+  </div>
+</AdminLayout>
+
+<style>
+  .enq-layout {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .enq-layout .admin-card + .admin-card {
+    margin-top: 0;
+  }
+
+  .enq-side {
+    display: grid;
+    gap: var(--space-3);
+    align-content: start;
+  }
+
+  .enq-dl {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .enq-dl > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .enq-dl dt {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .enq-dl dd {
+    overflow-wrap: anywhere;
+  }
+
+  .enq-message {
+    white-space: pre-wrap;
+  }
+
+  .enq-consent {
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+  }
+
+  .enq-muted {
+    color: var(--text-supporting);
+  }
+
+  .enq-current {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-bottom: var(--space-1);
+  }
+
+  .enq-status-form,
+  .enq-note-form {
+    display: grid;
+    gap: var(--space-1-5);
+    justify-items: start;
+    margin-top: var(--space-2);
+  }
+
+  .enq-status-form .admin-field,
+  .enq-note-form .admin-field {
+    width: 100%;
+  }
+
+  .enq-danger form {
+    margin-top: var(--space-1-5);
+  }
+
+  .enq-note-list {
+    display: grid;
+    gap: var(--space-1-5);
+    margin-top: var(--space-2);
+  }
+
+  .enq-note {
+    padding: var(--space-1-5) var(--space-2);
+    border-left: 3px solid var(--brand-steel);
+    background: var(--ice-50);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
+
+  .enq-note__meta {
+    font-size: var(--fs-xs);
+    color: var(--text-secondary);
+  }
+
+  .enq-note__body {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  @media (min-width: 768px) {
+    .enq-dl {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .enq-dl__wide {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (min-width: 1100px) {
+    .enq-layout {
+      grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    }
+
+    .enq-notes {
+      grid-column: 1;
+    }
+  }
+</style>

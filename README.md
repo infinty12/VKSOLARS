@@ -1,93 +1,169 @@
 # VK Solar High-Tech Power Solution — website
 
-Marketing website for VK Solar: solar panel cleaning, preventive maintenance, AI drone inspection and related services
-for industrial and commercial sites across Rajasthan.
+Website for VK Solar: solar panel cleaning, preventive maintenance, AI drone inspection and related services, with a
+local admin panel for **service-area coverage across India** and an **enquiry inbox**.
 
-**Stack:** [Astro 7.4](https://astro.build) (static output) · TypeScript (strict) · plain CSS design tokens ·
-Playwright + axe-core for browser and accessibility tests. No UI framework; client JavaScript is limited to the mobile
-menu, contact form, gallery lightbox, dashboard tabs and small scroll effects.
+**Stack:** [Astro 7.4](https://astro.build) with the Node adapter (`@astrojs/node`) · TypeScript (strict) · SQLite via
+Node’s built-in `node:sqlite` · plain CSS design tokens · Playwright + axe-core tests.
+
+- Content pages (`/`, `/services`, `/ai-drone-inspection`, `/about`, 404) are **pre-rendered** static HTML.
+- `/service-areas`, `/contact`, `/api/enquiries` and `/admin/**` are **server-rendered** and read the database.
+- Everything runs locally. **Not deployed.** The admin is reachable only from this computer by default.
 
 ---
 
 ## Requirements
 
-- Node.js **22.22.0 or newer** (Astro 7 requirement; developed on Node 24.22)
+- Node.js **22.22.0 or newer** (developed on Node 24.22; `node:sqlite` and native TypeScript in scripts are used)
 - npm 9.6.5+
+- Windows, macOS or Linux (commands below are for Windows PowerShell; they work the same in other shells)
 
-## Getting started
+## First-time setup
 
-```bash
+```powershell
 npm install
-npm run test:install   # one-time: downloads Playwright's Chromium for tests
-cp .env.example .env   # then fill in values (see Configuration)
-npm run dev            # http://localhost:4321
+npm run test:install          # one-time: Playwright's Chromium, for tests only
+Copy-Item .env.example .env   # then edit .env (see Configuration)
+npm run build
+npm run db:migrate            # creates storage\vk-solar.db and applies migrations
+npm run admin:create          # asks for a username and a password (hidden input, min 12 chars)
+npm start                     # http://127.0.0.1:4321  — admin at http://127.0.0.1:4321/admin
 ```
+
+Stop the server with **Ctrl+C**. To restart after code changes: `npm run build`, then `npm start` again.
 
 ## Scripts
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Development server with hot reload |
-| `npm run build` | Production build to `dist/` |
-| `npm run preview` | Serve the production build on :4321 |
+| `npm run dev` | Development server with hot reload (no security headers; uses `./storage`) |
+| `npm run build` | Production build to `dist/` (server + pre-rendered pages) |
+| `npm start` | Run the built site with security headers via `server.mjs` (loads `.env`) |
+| `npm run preview` | Same as `npm start` |
+| `npm run db:migrate` | Apply pending database migrations (safe to repeat) |
+| `npm run admin:create` | Create the first administrator; `npm run admin:create -- --reset <name>` sets a new password |
 | `npm run check` | Astro + TypeScript diagnostics |
-| `npm run lint` | ESLint (TypeScript + Astro rules) |
+| `npm run lint` | ESLint |
 | `npm run contrast` | WCAG contrast check of every colour pair the design system uses |
-| `npm run links` | Checks the built site for broken links, missing `#anchors` and `href="#"` placeholders |
-| `npm run validate:html` | Validates the built HTML with html-validate (see note below) |
-| `npm run seo` | Checks titles, descriptions, one `<h1>` per page, Open Graph, canonical, robots and sitemap in `dist/` |
-| `npm run test` | Playwright suite (starts `astro preview` automatically; run `npm run build` first) |
+| `npm run tokens` | Design-token integrity check (duplicates, undefined variables, valid CSS, exact brand colours) |
+| `npm run snapshot` | Crawl the built site through the real server into `.snapshot/` (disposable storage) |
+| `npm run links` | Broken links, missing `#anchors` and `href="#"` placeholders in the snapshot |
+| `npm run validate:html` | html-validate over the snapshot |
+| `npm run seo` | Titles, descriptions, one `<h1>`, Open Graph, canonical, robots and sitemap in the snapshot |
+| `npm run smoke:admin` | Security smoke test of admin, sessions, CSRF, local-only access and the enquiry endpoint |
+| `npm run test` | Playwright suite (starts its own servers with disposable storage; run `npm run build` first) |
 | `npm run verify` | All of the above in order |
 
-`node scripts/check-seo.mjs <dir> <url>` checks a build made with a domain, e.g.
-`PUBLIC_SITE_URL=https://www.example.in npx astro build --outDir dist-seo` then
-`node scripts/check-seo.mjs dist-seo https://www.example.in`.
+On a low-memory machine run the suite with fewer parallel browsers: `$env:PW_WORKERS=2; npm run verify`.
 
-**html-validate exclusions** (`.htmlvalidate.json`): formatting-only rules are off because they describe Astro’s
-minified output style, not validity. `role="list"` on `<ul>`/`<ol>` is allowed on purpose — Safari/VoiceOver drops list
-semantics when `list-style: none` is applied, and the role restores them.
+Tests and the snapshot **never touch `storage/`**: they use throwaway folders (`test-storage*`, `*-test-storage`) that
+are wiped on every run and excluded from Git.
 
-Utility scripts: `node scripts/screenshots.mjs <outDir> [routes…]` (full-page screenshots, needs preview running;
-`WIDTHS=375,768,1440` to choose widths) and `node scripts/og-image.mjs` (regenerates `public/og-image.jpg`).
+## Configuration (`.env`)
 
-## Project structure
-
-```
-src/
-  config/site.ts         ← ALL business facts (contact, cities, stats, testimonials, team, domain)
-  config/navigation.ts   ← main navigation
-  config/schema.ts       ← JSON-LD built only from verified fields
-  data/services.ts       ← the eight services (copy, benefits, inclusions)
-  data/process.ts        ← five-step process + home-page benefits
-  data/sampleInspection.ts ← ILLUSTRATIVE data for the drone dashboard demo
-  lib/enquiry.ts         ← contact form validation rules
-  styles/tokens.css      ← design tokens: colour, type, spacing, grid, radii, shadows, motion
-  styles/global.css      ← reset, base typography, layout primitives, focus styles
-  styles/fonts.css       ← self-hosted Poppins / Inter / JetBrains Mono (Latin subset)
-  layouts/               ← BaseLayout (head/SEO) and SiteLayout (header/footer)
-  components/            ← Header, Footer, Button, ServiceCard, ContactForm, InspectionDashboard, …
-  pages/                 ← /, /services, /ai-drone-inspection, /about, /service-areas, /contact, 404, robots.txt
-public/                  ← favicon, og-image.jpg, _headers (security headers)
-tests/                   ← Playwright specs
-scripts/                 ← contrast, link check, screenshots, OG image
-```
-
-## Configuration
-
-### Environment variables (`.env`)
-
-| Variable | Purpose | If empty |
+| Variable | Purpose | Default |
 |---|---|---|
-| `PUBLIC_SITE_URL` | Live domain, e.g. `https://www.example.in` | No canonical URLs, `og:url`/`og:image`, or `sitemap.xml` |
-| `PUBLIC_WEB3FORMS_KEY` | Contact-form access key | Form validates but tells the user it **was not sent** |
+| `PUBLIC_SITE_URL` | Live domain (set at **build** time). Enables canonical URLs, `og:url`/`og:image`, sitemap | unset |
+| `STORAGE_DIR` | Database, secret key and backups | `./storage` |
+| `ENQUIRIES_ENABLED` | Server switch for public enquiries (see below) | off |
+| `APP_SECRET` | Secret for signing form tokens; if unset, a random key is created in `STORAGE_DIR` | auto |
+| `HOST` / `PORT` | Network binding | `127.0.0.1` / `4321` |
+| `ADMIN_ALLOW_REMOTE` | Allow `/admin` from other machines. **Leave unset.** | off |
+| `COOKIE_SECURE` | Force `Secure` cookies (set when served over HTTPS behind a TLS proxy) | off |
+| `TRUST_PROXY` | Trust `X-Forwarded-*` headers (only behind a proxy you control) | off |
+| `ENQUIRY_RATE_LIMIT_PER_IP` / `_GLOBAL`, `ENQUIRY_MIN_FILL_MS` | Spam limits; defaults 5 per 10 min per address, 100 per hour site-wide, 3 s minimum | — |
 
-Both are `PUBLIC_` because they are meant to be visible in the browser — the Web3Forms key is designed to be public.
-There are no server-side secrets in this project.
+`.env`, `storage/` and all databases are excluded from Git. Never commit them.
 
-### Business information — `src/config/site.ts`
+## Admin panel
 
-Every company fact on the site comes from this one file, and **anything left `null` or empty is hidden** — the site never
-shows invented data. Fill in only verified information:
+Sign in at **http://127.0.0.1:4321/admin** with the account from `npm run admin:create`. There is no public registration
+and no default password.
+
+- **Local only:** `/admin` returns 404 to any non-loopback address unless `ADMIN_ALLOW_REMOTE=true`. `server.mjs` binds to
+  `127.0.0.1` and ignores `X-Forwarded-*` headers unless `TRUST_PROXY=true`.
+- **Sessions:** HttpOnly, SameSite=Strict cookie; 2 hours idle / 12 hours maximum; only a hash of the token is stored.
+  Changing a password (`admin:create -- --reset`) signs that account out everywhere.
+- **CSRF:** every state-changing admin request needs the session’s token; cross-site form posts are rejected.
+- **Login:** scrypt password hashes, one generic error message, lockout for 15 minutes after 5 failures.
+- **Audit log:** sign-ins, location and enquiry changes are recorded (ids and counts only — never enquiry content). The
+  dashboard shows recent activity.
+
+### Service Areas (India-wide coverage)
+
+All 28 states and 8 union territories are pre-loaded from the Government of India list
+([knowindia.india.gov.in](https://knowindia.india.gov.in/states-uts/); names of administrative divisions are public facts,
+no third-party dataset or licence). **No coverage is pre-filled** and no city directory is imported — every location is
+added by an administrator.
+
+Each location has a state/UT, optional district and city (both empty = the whole state/UT), a status, optional services
+and a public note.
+
+| Status | Shown publicly when published? | Presented as |
+|---|---|---|
+| Coverage available | Yes | an active service location |
+| Limited coverage | Yes | an active service location (with its note) |
+| Planned | Yes, in a separate “Planned — not yet available” list | **not** available |
+| Not yet confirmed | **Never** — cannot be published (blocked by the form, the server and a database constraint) | — |
+
+Unpublished and deleted locations never appear. Duplicates (same state/UT, district and city, ignoring case and spaces)
+are rejected. The public `/service-areas` page has search and a state filter that work without JavaScript.
+
+### Enquiries
+
+The contact form posts to `POST /api/enquiries`, which stores enquiries in the local database for the admin inbox.
+**No email is sent and no third-party service is used.**
+
+**Submissions are off by default.** They are accepted only when **both** are on:
+
+1. the server switch `ENQUIRIES_ENABLED=true` in `.env` (restart `npm start` after changing it), and
+2. the admin switch **Admin → Enquiries → Enquiry settings → Accept enquiries**.
+
+Until then the contact page shows “Online enquiries are not active yet”, the browser does not send anything, and the
+server refuses submissions (`503`) without storing them.
+
+To turn enquiries on locally: set `ENQUIRIES_ENABLED=true` in `.env`, `npm start`, sign in, tick **Accept enquiries**,
+then submit a test enquiry from `/contact` and check it appears in the inbox. When hosting later, set
+`ENQUIRIES_ENABLED` in the host’s environment, serve over HTTPS and set `COOKIE_SECURE=true`.
+
+Every submission must pass, in order: switches on → same-origin request → size limit (16 KB) → hidden honeypot empty →
+signed form token (issued by `/contact`, at least 3 s and at most 24 h old) → rate limits → server-side validation (the
+same rules as the browser, in `src/lib/enquiry.ts`). Only then is it stored, with parameterised queries. Visitors only ever
+see fixed messages — never database errors. A success message is shown **only after the server confirms the enquiry was
+stored**, with its reference (e.g. `ENQ-20261018-1A2B3C`). The form also works without JavaScript.
+
+Fields: name, phone (Indian mobile or landline), email (optional), service, state/UT, city/site location, message
+(optional) and a required consent checkbox. The exact consent wording is stored with each enquiry.
+
+**Inbox** (Admin → Enquiries): search, status filter (New / In progress / Resolved), pagination, detail view, status
+changes, internal notes (admin-only, never shown to the customer) and delete with confirmation.
+
+**Retention policy:** resolved enquiries are kept for **365 days** after resolution by default (adjustable, 30–3650 days,
+in Enquiry settings). **Nothing is deleted automatically.** The inbox shows how many resolved enquiries are past the
+policy, and an admin deletes them after a preview of the exact count and a confirmation; the deletion is audit-logged.
+New and In-progress enquiries are never affected. Delete individual enquiries at any time when the details are no longer
+needed or the person asks.
+
+## Database, migrations and backups
+
+- File: `storage\vk-solar.db` (SQLite, WAL mode). Migrations live in `src/lib/server/migrations.ts` and are applied in
+  order by `npm run db:migrate` (and automatically on first server start). Migrations are append-only: never edit one
+  that has shipped.
+- **Back up** while the server is stopped (Ctrl+C), by copying the whole storage folder:
+
+  ```powershell
+  Copy-Item -Recurse storage "backups\storage-$(Get-Date -Format yyyyMMdd-HHmmss)"
+  ```
+
+  The folder contains customer enquiries — keep backups private and out of Git (`backups/` is ignored).
+- **Restore:** stop the server, move the current `storage` aside, copy the backup folder back to `storage`, run
+  `npm run db:migrate`, then `npm start`.
+- A built-in backup/restore command is not part of this stage yet.
+
+## Business information — `src/config/site.ts`
+
+Company facts shown on the static pages come from this one file, and **anything left `null` or empty is hidden** — the site
+never shows invented data. (Service coverage and enquiries are in the database instead, managed in the admin.)
 
 | Field | Shows up as |
 |---|---|
@@ -95,41 +171,16 @@ shows invented data. Fill in only verified information:
 | `contact.whatsapp` | Floating WhatsApp button, footer, contact page |
 | `contact.email`, `address`, `hours` | Footer and contact page; `address` also upgrades JSON-LD to `LocalBusiness` |
 | `social.*` | Footer social links |
-| `stats` | Home and About statistics band with count-up (hidden while empty) |
+| `stats` | Home and About statistics band (hidden while empty) |
 | `testimonials` | Home testimonials (hidden while empty; each must have `approved: true`) |
 | `team`, `achievements` | About page (a clearly marked “coming soon” note shows while `team` is empty) |
-| `serviceAreas.confirmed` | City list and map pins on Service Areas; footer service-area list |
 | `founded` | JSON-LD `foundingDate` |
-
-## Contact form
-
-- **Until `PUBLIC_WEB3FORMS_KEY` is set, the form shows a visible “Online enquiries are not active yet” notice** above
-  the fields, and submitting says the message was not sent. No request is made.
-- Client-side validation (on blur and on submit) with inline errors, a linked error summary, and correct input types and
-  autocomplete for mobile keyboards and autofill.
-- Loading state, duplicate-submission guard, 15-second timeout, and truthful success/error messages: **“sent” is shown
-  only after the provider replies `success: true`.** On failure the user’s input is kept.
-- Spam protection: hidden honeypot field (`botcheck`), plus Web3Forms’ own server-side spam filtering.
-- `?service=<slug>` and `?location=<text>` in the URL pre-fill the form (used by service CTAs and the Service Areas
-  availability box).
-
-**Setup:** create a free access key at [web3forms.com](https://web3forms.com) using the inbox that should receive
-enquiries, then set `PUBLIC_WEB3FORMS_KEY` and rebuild.
-
-**Server-side validation:** the site is static, so server-side checks run at Web3Forms. For full control (your own
-validation, rate limiting, CRM integration), add an Astro server endpoint with a host adapter (Netlify/Vercel/Cloudflare),
-reuse `validateEnquiry()` from `src/lib/enquiry.ts` on the server, and point `site.form.endpoint` at it.
 
 ## AI drone dashboard
 
-The dashboard on `/ai-drone-inspection` is a **demonstration** that uses invented numbers from
-`src/data/sampleInspection.ts`. It is permanently labelled “Illustrative sample data — not live telemetry.” There is no
-drone API, telemetry feed or analytics backend.
-
-To connect real data later you would need: a source of inspection results (an inspection-software export or API),
-per-client access control (results are confidential), and a server or build step to fetch them. Keep the
-`SampleBlock` shape in `sampleInspection.ts` as the interface and replace the data source; remove the sample label only
-when the data is real.
+The dashboard on `/ai-drone-inspection` is a **demonstration** using invented numbers from
+`src/data/sampleInspection.ts`, permanently labelled “Illustrative sample data — not live telemetry.” There is no drone
+API or telemetry feed.
 
 ## Content to confirm before launch
 
@@ -137,46 +188,31 @@ when the data is real.
 |---|---|
 | Phone, WhatsApp, email, office address, hours | **Not provided** — hidden |
 | Live domain | **Not provided** — canonical/sitemap disabled |
-| Web3Forms key | **Not provided** — form reports “not sent” |
-| Confirmed service cities | **Not provided** — availability is “confirmed per site” |
-| Company statistics | **Not provided** — section hidden |
-| Client testimonials | **Not provided** — section hidden |
+| Confirmed service locations | **Not provided** — add them in Admin → Service Areas |
+| Company statistics, testimonials | **Not provided** — sections hidden |
 | Team profiles, certifications, founding year | **Not provided** — About shows a “coming soon” note |
-| Logo | Placeholder mark in `src/components/Logo.astro` — replace with the official logo |
-| Photography | None supplied; the site uses SVG illustrations (solar array, thermal examples) labelled where relevant. Replace with real, approved photos via `astro:assets` `<Image>` |
-| About page mission, vision and values | **Draft copy** written from the brief — needs VK Solar’s approval |
-| Service descriptions | Written from general industry practice — review for accuracy against what VK Solar actually provides |
-| Home-page “trained technicians” benefit | Taken from the brief — confirm it is accurate |
+| Logo, photography | Placeholder logo and SVG illustrations — replace with official assets |
+| About page mission, vision and values; service descriptions | **Draft copy** — needs VK Solar’s approval |
+| Home, About and Services pages still mention Rajasthan | Review wording now that coverage is India-wide |
 
 ## Accessibility & quality
 
-- Target: WCAG 2.1 AA. All pages pass axe-core’s WCAG 2.1 A/AA rules in the test suite (automated checks can’t catch
-  everything — a manual screen-reader pass is still recommended).
-- Brand-colour adjustments for contrast: supporting text uses `#5C6B80` instead of `#718096` (which is 4.02:1 on white),
-  and the CTA gradient starts at `#3A6A8F` instead of `#4A7FA7` (white text on `#4A7FA7` is 4.30:1). `#4A7FA7` is still
-  used for icons, borders and focus rings, where 3:1 applies.
-- Keyboard: skip link, visible focus, focus-trapped mobile menu with Escape, accessible tabs and dialog.
+- Target: WCAG 2.1 AA. Public pages and the admin pass axe-core’s WCAG 2.1 A/AA rules in the test suite (automated checks
+  can’t catch everything — a manual screen-reader pass is still recommended).
+- Brand palette: Midnight Navy `#021024`, Deep Solar Blue `#052659`, Steel Blue `#5483B3`, Soft Blue `#7DA0CA`, Ice Blue
+  `#C1E8FF`, all defined in `src/styles/tokens.css`. Steel Blue is used for icons, borders and focus rings only (3.98:1 on
+  white); Soft and Ice Blue are decorative/background only.
+- Keyboard: skip links, visible focus, focus-trapped mobile menu, accessible tabs and dialogs.
 - `prefers-reduced-motion` disables reveal, float and count-up animations.
 
 ## Deployment
 
-**Not deployed, and no hosting provider has been chosen yet.** The build is static (`dist/`) and can be hosted on any
-static host. Set the two environment variables in the host’s build settings.
+**Not deployed, and no hosting provider has been chosen.** The site now needs a **Node.js host** (it runs `server.mjs`);
+static-only hosts such as GitHub Pages or plain Netlify/Cloudflare Pages hosting can no longer serve it.
 
-### Security headers — where they actually apply
+`server.mjs` sends the security headers itself on every response: a Content-Security-Policy (`'self'` only, no
+third-party connections), `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `X-Frame-Options: DENY` and
+`Cross-Origin-Opener-Policy`. `public/_headers` from the earlier static setup is no longer used.
 
-`public/_headers` defines a Content-Security-Policy, `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
-`Permissions-Policy`, `X-Frame-Options: DENY`, and immutable caching for `/_astro/*`. That file format is only honoured
-by some hosts:
-
-| Host | Does `_headers` apply? | What to do |
-|---|---|---|
-| Netlify | Yes | Nothing |
-| Cloudflare Pages | Yes | Nothing |
-| Vercel | **No** | Copy the values into `vercel.json` → `headers` |
-| GitHub Pages | **No — custom headers aren’t supported** | Put a CDN (e.g. Cloudflare) in front, or accept no CSP |
-| S3 + CloudFront, Nginx, Apache, others | **No** | Configure the same headers in the CDN/server |
-
-The CSP was verified by injecting it into every page in Chromium (no violations; menu, lightbox, form and fonts all
-worked). It has **not** been verified on a live host — after deploying, check the response headers with your browser’s
-dev tools or `curl -I`.
+Before any deployment: serve over HTTPS, set `COOKIE_SECURE=true`, keep `ADMIN_ALLOW_REMOTE` unset (or put the admin behind
+additional access control), set `TRUST_PROXY=true` only behind a proxy you control, and back up `storage/` regularly.

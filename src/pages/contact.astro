@@ -2,11 +2,36 @@
 import SiteLayout from '../layouts/SiteLayout.astro';
 import PageHero from '../components/PageHero.astro';
 import ContactForm from '../components/ContactForm.astro';
-import RajasthanMap from '../components/RajasthanMap.astro';
 import SectionHeading from '../components/SectionHeading.astro';
 import Button from '../components/Button.astro';
 import Icon from '../components/Icon.astro';
 import { site, telLink, whatsappLink } from '../config/site';
+import { enquiryGates } from '../lib/server/settings.ts';
+import { listRegions, type Region } from '../lib/server/areas.ts';
+import { issueFormToken, ENQUIRY_MESSAGES, REFERENCE_RE, type EnquiryMessageCode } from '../lib/server/enquiries.ts';
+
+// Server-rendered: whether submissions are open, the state list and a fresh signed form token.
+// If the database is unavailable the form stays closed (and says so) rather than losing enquiries.
+let formOpen = false;
+let regions: Region[] = [];
+try {
+  formOpen = enquiryGates().open;
+  regions = listRegions();
+} catch (err) {
+  console.error('[contact] could not load form settings:', (err as Error).name);
+}
+const formToken = issueFormToken();
+Astro.response.headers.set('Cache-Control', 'no-store'); // the page embeds a per-visit token
+
+// Result of a no-JavaScript submission (whitelisted codes only; never reflected user text).
+const outcome = Astro.url.searchParams.get('enquiry');
+const ref = Astro.url.searchParams.get('ref') ?? '';
+const formResult =
+  outcome === 'sent' && REFERENCE_RE.test(ref)
+    ? { kind: 'success' as const, message: `Thank you — your enquiry has been received (reference ${ref}). Our team will contact you to arrange your inspection.` }
+    : outcome && outcome in ENQUIRY_MESSAGES
+      ? { kind: 'error' as const, message: ENQUIRY_MESSAGES[outcome as EnquiryMessageCode] }
+      : null;
 
 const tel = telLink();
 const wa = whatsappLink();
@@ -21,7 +46,7 @@ const nextSteps = [
 
 <SiteLayout
   title="Contact Us"
-  description="Contact VK Solar to request a free solar inspection or a quote for panel cleaning, maintenance or AI drone inspection anywhere in Rajasthan."
+  description="Contact VK Solar to request a free solar inspection or a quote for panel cleaning, maintenance or AI drone inspection, and to check availability for your location in India."
 >
   <PageHero eyebrow="Contact" title="Request a free inspection">
     <p>
@@ -35,7 +60,7 @@ const nextSteps = [
       <div class="contact-form-card">
         <h2 id="enquiry-title" class="contact-form-card__title">Send an enquiry</h2>
         <p class="contact-form-card__intro">It takes about a minute. There’s no obligation.</p>
-        <ContactForm />
+        <ContactForm open={formOpen && regions.length > 0} token={formToken} regions={regions} result={formResult} />
       </div>
 
       <aside class="contact-aside" aria-label="Contact information">
@@ -135,18 +160,15 @@ const nextSteps = [
   <section class="section section--alt" aria-labelledby="area-title">
     <div class="container area-layout">
       <div>
-        <SectionHeading eyebrow="Service area" title="Serving sites across Rajasthan" id="area-title">
+        <SectionHeading eyebrow="Service areas" title="Check coverage for your location" id="area-title">
           <p>
-            We work with industrial and commercial solar plants throughout Rajasthan. Availability depends on your site’s
-            location, size and the service you need, so we confirm it for every enquiry.
+            Availability depends on your site’s location, size and the service you need, so we confirm it for every enquiry. See
+            the locations we currently serve, or include your location in the form above.
           </p>
         </SectionHeading>
         <div class="area-actions">
           <Button href="/service-areas" variant="secondary" icon="arrowRight">View service areas</Button>
         </div>
-      </div>
-      <div class="area-map">
-        <RajasthanMap compact />
       </div>
     </div>
   </section>
@@ -292,13 +314,6 @@ const nextSteps = [
     align-items: center;
   }
 
-  .area-map {
-    padding: var(--space-3);
-    border-radius: var(--radius-xl);
-    background: var(--color-bg);
-    border: var(--border-thin);
-  }
-
   .explore {
     display: flex;
     flex-wrap: wrap;
@@ -329,8 +344,7 @@ const nextSteps = [
     }
 
     .area-layout {
-      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-      gap: var(--space-10);
+      max-width: 880px;
     }
   }
 </style>

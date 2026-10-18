@@ -44,13 +44,21 @@ export const LOGIN_LIMIT = {
   lockMs: 15 * 60 * 1000,
 };
 
+/** Positive integer from an environment variable, or the default. */
+const intEnv = (name: string, fallback: number) => {
+  const n = Number(env[name]);
+  return Number.isInteger(n) && n >= 0 ? n : fallback;
+};
+
 export const ENQUIRY_LIMIT = {
-  perIpMax: 5,
+  /** Submissions allowed per client address per window (ENQUIRY_RATE_LIMIT_PER_IP). */
+  perIpMax: intEnv('ENQUIRY_RATE_LIMIT_PER_IP', 5),
   perIpWindowMs: 10 * 60 * 1000,
-  globalMax: 100,
+  /** Submissions allowed site-wide per window (ENQUIRY_RATE_LIMIT_GLOBAL). */
+  globalMax: intEnv('ENQUIRY_RATE_LIMIT_GLOBAL', 100),
   globalWindowMs: 60 * 60 * 1000,
-  /** Reject forms submitted faster than a person could fill them in. */
-  minFillMs: 3000,
+  /** Reject forms submitted faster than a person could fill them in (ENQUIRY_MIN_FILL_MS). */
+  minFillMs: intEnv('ENQUIRY_MIN_FILL_MS', 3000),
   /** Reject form tokens older than this. */
   maxAgeMs: 24 * 60 * 60 * 1000,
   /** Reject request bodies larger than this (bytes). */

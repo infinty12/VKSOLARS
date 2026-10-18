@@ -1,15 +1,63 @@
 ---
+// Server-rendered: coverage comes from the database at request time, so admins can publish
+// changes without a rebuild. Only listPublicLocations() is used — it returns published,
+// non-"unconfirmed" locations only.
 import SiteLayout from '../layouts/SiteLayout.astro';
 import PageHero from '../components/PageHero.astro';
 import SectionHeading from '../components/SectionHeading.astro';
-import RajasthanMap from '../components/RajasthanMap.astro';
 import CTASection from '../components/CTASection.astro';
 import Icon from '../components/Icon.astro';
-import { site } from '../config/site';
 import { services, serviceHref } from '../data/services';
 import type { IconName } from '../components/icons';
+import { listPublicLocations, listRegions, placeLabel, cleanText, SERVICEABLE, type Location, type Region } from '../lib/server/areas.ts';
 
-const confirmed = site.serviceAreas.confirmed;
+const PUBLIC_STATUS: Record<string, string> = {
+  available: 'Service available',
+  limited: 'Limited service',
+  planned: 'Planned — not yet available',
+};
+
+let all: Location[] = [];
+let regions: Region[] = [];
+let loadFailed = false;
+try {
+  all = listPublicLocations();
+  regions = listRegions();
+} catch (err) {
+  // Never expose internals to visitors; log only the error type for the operator.
+  console.error('[service-areas] failed to load coverage:', (err as Error).name);
+  loadFailed = true;
+  Astro.response.status = 503;
+}
+
+const q = cleanText(Astro.url.searchParams.get('q'), 80).slice(0, 80);
+const regionCode = regions.some((r) => r.code === Astro.url.searchParams.get('region')) ? Astro.url.searchParams.get('region')! : '';
+const needle = q.toLocaleLowerCase('en-IN');
+const matches = (l: Location) =>
+  (!regionCode || l.regionCode === regionCode) &&
+  (!needle || [l.city, l.district, l.regionName, l.note].some((v) => v.toLocaleLowerCase('en-IN').includes(needle)));
+
+const filtered = all.filter(matches);
+const active = filtered.filter((l) => (SERVICEABLE as readonly string[]).includes(l.status));
+const planned = filtered.filter((l) => l.status === 'planned');
+const searching = Boolean(q || regionCode);
+
+/** Group by state/UT, keeping the database's ordering. */
+function byRegion(list: Location[]) {
+  const groups = new Map<string, { name: string; items: Location[] }>();
+  for (const l of list) {
+    const g = groups.get(l.regionCode) ?? { name: l.regionName, items: [] };
+    g.items.push(l);
+    groups.set(l.regionCode, g);
+  }
+  return [...groups.values()];
+}
+
+// Only states/UTs that actually have published locations are offered in the filter.
+const regionsWithCoverage = regions.filter((r) => all.some((l) => l.regionCode === r.code));
+const serviceTitle = Object.fromEntries(services.map((s) => [s.slug, s.title]));
+const regionName = regions.find((r) => r.code === regionCode)?.name ?? '';
+const availabilityHref = (place: string) => `/contact?location=${encodeURIComponent(place)}#enquiry`;
 
 const factors: { title: string; text: string; icon: IconName }[] = [
   { title: 'Site location', text: 'Travel distance and access to your site affect scheduling.', icon: 'mapPin' },
@@ -21,81 +69,147 @@ const factors: { title: string; text: string; icon: IconName }[] = [
 
 <SiteLayout
   title="Service Areas"
-  description="Where VK Solar provides solar panel cleaning, maintenance and AI drone inspection in Rajasthan, and how to check service availability for your site."
+  description="Where VK Solar provides solar panel cleaning, maintenance and AI drone inspection in India, and how to check service availability for your location."
 >
-  <PageHero eyebrow="Service areas" title="Solar services across Rajasthan">
+  <PageHero eyebrow="Service areas" title="Solar services across India">
     <p>
-      We support industrial and commercial solar sites across Rajasthan. Tell us where your site is and we’ll confirm availability
-      and the best way to schedule your service.
+      Find out where VK Solar currently provides service. Coverage is confirmed location by location — if your area isn’t listed
+      yet, ask us and we’ll check availability for your site.
     </p>
   </PageHero>
 
   <section class="section" aria-labelledby="coverage-title">
-    <div class="container coverage">
-      <div class="coverage__map" data-reveal>
-        <RajasthanMap />
-      </div>
+    <div class="container">
+      <SectionHeading eyebrow="Coverage" title="Where we currently provide service" id="coverage-title">
+        <p>
+          The locations below are confirmed by our team. Planned areas are listed separately and are <strong>not yet available</strong>.
+          Anywhere not listed is not yet confirmed.
+        </p>
+      </SectionHeading>
 
-      <div class="coverage__text">
-        <SectionHeading eyebrow="Coverage" title="How our coverage works" id="coverage-title">
-          <p>
-            Our focus is Rajasthan. Because every site is different, we confirm availability for each enquiry rather than
-            promising fixed coverage areas.
-          </p>
-        </SectionHeading>
+      {
+        loadFailed ? (
+          <div class="sa-notice" role="alert">
+            <Icon name="alert" size={22} />
+            <p>
+              <strong>Coverage information is temporarily unavailable.</strong> Please try again later, or{' '}
+              <a href="/contact#enquiry">send us an enquiry</a> and we’ll confirm availability for your location.
+            </p>
+          </div>
+        ) : (
+          <>
+            {all.length > 0 && (
+              <form method="get" action="/service-areas#coverage-title" class="sa-filter" role="search" aria-label="Search service locations">
+                <div class="sa-filter__field">
+                  <label for="sa-q">City, district or state</label>
+                  <input id="sa-q" name="q" type="search" value={q} maxlength="80" autocomplete="address-level2" />
+                </div>
+                <div class="sa-filter__field">
+                  <label for="sa-region">State or union territory</label>
+                  <select id="sa-region" name="region">
+                    <option value="">All with coverage</option>
+                    {regionsWithCoverage.map((r) => (
+                      <option value={r.code} selected={r.code === regionCode}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div class="sa-filter__actions">
+                  <button type="submit" class="sa-btn sa-btn--primary">
+                    Search
+                  </button>
+                  {searching && (
+                    <a href="/service-areas#coverage-title" class="sa-btn sa-btn--secondary">
+                      Clear
+                    </a>
+                  )}
+                </div>
+              </form>
+            )}
 
-        {
-          confirmed.length > 0 ? (
-            <div class="coverage__block">
-              <h3>
-                <Icon name="checkCircle" size={20} /> Confirmed service locations
-              </h3>
-              <ul role="list" class="city-list">
-                {confirmed.map((c) => (
-                  <li>
-                    <span class="city-list__name">{c.name}</span>
-                    {c.district && <span class="city-list__meta">{c.district} district</span>}
-                    {c.note && <span class="city-list__meta">{c.note}</span>}
-                  </li>
+            <p class="sa-count" role="status" data-result-count>
+              {all.length === 0
+                ? 'No confirmed service locations have been published yet.'
+                : searching
+                  ? `${active.length} confirmed ${active.length === 1 ? 'location' : 'locations'} found${regionName ? ` in ${regionName}` : ''}${q ? ` matching “${q}”` : ''}.`
+                  : `${active.length} confirmed ${active.length === 1 ? 'location' : 'locations'}.`}
+            </p>
+
+            {active.length > 0 ? (
+              <div class="sa-groups" data-coverage="active">
+                {byRegion(active).map((g) => (
+                  <section class="sa-region" aria-label={g.name}>
+                    <h3 class="sa-region__name">{g.name}</h3>
+                    <ul role="list" class="sa-list">
+                      {g.items.map((l) => (
+                        <li class="sa-card">
+                          <div class="sa-card__head">
+                            <span class="sa-card__place">{placeLabel(l)}</span>
+                            <span class:list={['sa-badge', `sa-badge--${l.status}`]}>
+                              <Icon name={l.status === 'available' ? 'checkCircle' : 'info'} size={14} />
+                              {PUBLIC_STATUS[l.status]}
+                            </span>
+                          </div>
+                          {l.services.length > 0 && (
+                            <p class="sa-card__services">
+                              <span class="sr-only">Services: </span>
+                              {l.services.map((s) => serviceTitle[s]).join(' · ')}
+                            </p>
+                          )}
+                          {l.note && <p class="sa-card__note">{l.note}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
                 ))}
-              </ul>
-            </div>
-          ) : null
-        }
+              </div>
+            ) : (
+              <div class="sa-empty">
+                <p>
+                  {searching
+                    ? 'We haven’t published a confirmed location matching your search yet. That doesn’t mean we can’t help — ask us about your site.'
+                    : 'Confirmed locations will be listed here as they are published. In the meantime, ask us about availability at your site.'}
+                </p>
+                <a class="sa-btn sa-btn--primary" href={availabilityHref(q || regionName)}>
+                  Ask about availability <Icon name="arrowRight" size={18} />
+                </a>
+              </div>
+            )}
 
-        <div class="coverage__block coverage__block--pending">
-          <h3>
-            <Icon name="info" size={20} />
-            {confirmed.length > 0 ? 'Elsewhere in Rajasthan' : 'Check availability for your site'}
-          </h3>
-          <p>
-            {
-              confirmed.length > 0
-                ? 'For locations not listed above, availability is confirmed on request.'
-                : 'Enter your city or industrial area and we’ll confirm whether we can serve your site, and when.'
-            }
-          </p>
+            {planned.length > 0 && (
+              <div class="sa-planned" data-coverage="planned">
+                <h3 class="sa-planned__title">
+                  <Icon name="clock" size={20} /> Planned areas — not yet available
+                </h3>
+                <p class="sa-planned__intro">We intend to offer service here in future. These areas are not currently served.</p>
+                <ul role="list" class="sa-planned__list">
+                  {planned.map((l) => (
+                    <li>
+                      <span class="sa-card__place">{placeLabel(l)}</span>, {l.regionName}
+                      <span class="sa-badge sa-badge--planned">{PUBLIC_STATUS.planned}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )
+      }
 
-          <!-- Plain GET form: works without JavaScript and pre-fills the contact form. -->
-          <form class="availability" action="/contact#enquiry" method="get">
-            <label for="avail-location">Your site location</label>
-            <div class="availability__row">
-              <input
-                id="avail-location"
-                name="location"
-                type="text"
-                required
-                minlength="2"
-                maxlength="120"
-                autocomplete="address-level2"
-                placeholder="e.g. your city or industrial area"
-              />
-              <button type="submit" class="availability__btn">
-                Check availability <Icon name="arrowRight" size={18} />
-              </button>
-            </div>
-          </form>
-        </div>
+      <div class="sa-ask">
+        <h3><Icon name="mapPin" size={20} /> Not listed? Check availability for your site</h3>
+        <p>Tell us where your site is and we’ll confirm whether we can serve it, and when.</p>
+        <!-- Plain GET form: works without JavaScript and pre-fills the contact form. -->
+        <form class="sa-ask__form" action="/contact#enquiry" method="get">
+          <label for="avail-location">Your site location</label>
+          <div class="sa-ask__row">
+            <input id="avail-location" name="location" type="text" required minlength="2" maxlength="120" autocomplete="address-level2" placeholder="City, town or industrial area" />
+            <button type="submit" class="sa-btn sa-btn--primary">
+              Check availability <Icon name="arrowRight" size={18} />
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </section>
@@ -123,8 +237,8 @@ const factors: { title: string; text: string; icon: IconName }[] = [
 
   <section class="section" aria-labelledby="area-services-title">
     <div class="container">
-      <SectionHeading eyebrow="Services" title="Services available for Rajasthan sites" id="area-services-title">
-        <p>Every service can be requested for your location — we’ll confirm what’s possible for your site.</p>
+      <SectionHeading eyebrow="Services" title="Services you can ask about" id="area-services-title">
+        <p>Request any service for your location — we’ll confirm what’s possible for your site.</p>
       </SectionHeading>
       <ul role="list" class="svc-links">
         {
@@ -150,99 +264,34 @@ const factors: { title: string; text: string; icon: IconName }[] = [
 </SiteLayout>
 
 <style>
-  .coverage {
-    display: grid;
-    gap: var(--space-6);
-    align-items: start;
-  }
-
-  .coverage__map {
-    padding: var(--space-3);
-    border-radius: var(--radius-xl);
-    background: var(--white);
-    border: var(--border-thin);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .coverage__text {
-    display: grid;
-    gap: var(--space-3);
-  }
-
-  .coverage__text :global(.section-heading) {
-    margin-bottom: 0;
-  }
-
-  .coverage__block {
-    padding: var(--space-3);
-    border-radius: var(--radius-lg);
-    background: var(--white);
-    border: var(--border-thin);
-  }
-
-  .coverage__block--pending {
-    background: var(--sky-50);
-    border-color: var(--sky-100);
-  }
-
-  .coverage__block h3 {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    font-size: var(--fs-h4);
-    margin-bottom: var(--space-1);
-  }
-
-  .coverage__block h3 :global(.icon) {
-    color: var(--color-accent-text);
-  }
-
-  .coverage__block > p {
-    color: var(--text-secondary);
-  }
-
-  .city-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: var(--space-1);
-    margin-top: var(--space-1-5);
-  }
-
-  .city-list li {
-    display: grid;
-    padding: var(--space-1) var(--space-1-5);
-    border-radius: var(--radius-sm);
-    background: var(--color-bg);
-  }
-
-  .city-list__name {
-    font-weight: var(--fw-semibold);
-  }
-
-  .city-list__meta {
-    color: var(--text-supporting);
-    font-size: var(--fs-xs);
-  }
-
-  .availability {
-    display: grid;
-    gap: 6px;
-    margin-top: var(--space-2);
-  }
-
-  .availability label {
-    font-weight: var(--fw-semibold);
-    font-size: var(--fs-sm);
-  }
-
-  .availability__row {
+  .sa-filter {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-1);
+    align-items: flex-end;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    padding: var(--space-3);
+    background: var(--white);
+    border: var(--border-thin);
+    border-radius: var(--radius-lg);
   }
 
-  .availability input {
+  .sa-filter__field {
+    display: grid;
+    gap: 6px;
     flex: 1 1 220px;
+  }
+
+  .sa-filter label,
+  .sa-ask label {
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+  }
+
+  .sa-filter input,
+  .sa-filter select,
+  .sa-ask input {
+    width: 100%;
     min-height: 48px;
     padding: 0.75rem 0.875rem;
     border: 1.5px solid var(--color-border-control);
@@ -251,34 +300,234 @@ const factors: { title: string; text: string; icon: IconName }[] = [
     font-size: var(--fs-base);
   }
 
-  .availability input::placeholder {
+  .sa-ask input::placeholder {
     color: var(--text-supporting);
   }
 
-  .availability input:focus-visible {
+  .sa-filter input:focus-visible,
+  .sa-filter select:focus-visible,
+  .sa-ask input:focus-visible {
     outline: none;
-    border-color: var(--blue-700);
+    border-color: var(--brand-solar);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-steel) 35%, transparent);
   }
 
-  .availability__btn {
+  .sa-filter__actions {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .sa-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: var(--space-1);
     min-height: 48px;
     padding-inline: var(--space-3);
-    border: 0;
+    border: 1.5px solid transparent;
     border-radius: var(--radius-md);
-    background: var(--gradient-cta);
-    background-color: var(--blue-700);
-    color: var(--white);
     font-family: var(--font-heading);
     font-weight: var(--fw-semibold);
+    text-decoration: none;
+    white-space: nowrap;
   }
 
-  .availability__btn:hover {
-    background-image: linear-gradient(90deg, var(--blue-700), var(--navy-900));
+  .sa-btn--primary {
+    background: var(--btn-primary-bg);
+    color: var(--btn-primary-text);
+  }
+
+  .sa-btn--primary:hover {
+    background: var(--btn-primary-bg-hover);
+    color: var(--btn-primary-text);
+  }
+
+  .sa-btn--secondary {
+    background: var(--btn-secondary-bg);
+    color: var(--btn-secondary-text);
+    border-color: var(--btn-secondary-border);
+  }
+
+  .sa-btn--secondary:hover {
+    background: var(--btn-secondary-bg-hover);
+  }
+
+  .sa-count {
+    margin-block: var(--space-2);
+    color: var(--text-secondary);
+    font-weight: var(--fw-medium);
+  }
+
+  .sa-groups {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .sa-region__name {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-1-5);
+    padding-bottom: var(--space-1);
+    border-bottom: 2px solid var(--color-border-strong);
+  }
+
+  .sa-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: var(--space-1-5);
+  }
+
+  .sa-card {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-2);
+    background: var(--white);
+    border: var(--border-thin);
+    border-radius: var(--radius-md);
+  }
+
+  .sa-card__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-1);
+  }
+
+  .sa-card__place {
+    font-weight: var(--fw-semibold);
+    color: var(--text-primary);
+  }
+
+  .sa-card__services,
+  .sa-card__note {
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+  }
+
+  .sa-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border-radius: var(--radius-pill);
+    border: 1px solid transparent;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    white-space: nowrap;
+  }
+
+  .sa-badge--available {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+    border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
+  }
+
+  .sa-badge--limited {
+    background: var(--ice-100);
+    color: var(--brand-solar);
+    border-color: var(--brand-soft);
+  }
+
+  .sa-badge--planned {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+    border-color: var(--color-warning-border);
+  }
+
+  .sa-empty,
+  .sa-notice {
+    display: grid;
+    gap: var(--space-2);
+    justify-items: start;
+    padding: var(--space-3);
+    background: var(--white);
+    border: 1px dashed var(--color-border-control);
+    border-radius: var(--radius-lg);
+    color: var(--text-secondary);
+  }
+
+  .sa-notice {
+    display: flex;
+    align-items: flex-start;
+    border: 1.5px solid var(--color-error);
+    background: var(--color-error-bg);
+    color: var(--color-error);
+  }
+
+  .sa-planned {
+    margin-top: var(--space-5);
+    padding: var(--space-3);
+    background: var(--color-warning-bg);
+    border: 1px solid var(--color-warning-border);
+    border-radius: var(--radius-lg);
+  }
+
+  .sa-planned__title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--fs-h4);
+    color: var(--color-warning);
+  }
+
+  .sa-planned__intro {
+    margin-block: var(--space-1) var(--space-2);
+    color: var(--text-secondary);
+    font-size: var(--fs-sm);
+  }
+
+  .sa-planned__list {
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .sa-planned__list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .sa-ask {
+    display: grid;
+    gap: var(--space-1);
+    margin-top: var(--space-6);
+    padding: var(--space-3);
+    background: var(--ice-100);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+  }
+
+  .sa-ask h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--fs-h4);
+  }
+
+  .sa-ask h3 :global(.icon) {
+    color: var(--brand-solar);
+  }
+
+  .sa-ask > p {
+    color: var(--text-secondary);
+  }
+
+  .sa-ask__form {
+    display: grid;
+    gap: 6px;
+    margin-top: var(--space-1);
+  }
+
+  .sa-ask__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .sa-ask__row input {
+    flex: 1 1 220px;
+    width: auto;
   }
 
   .factors {
@@ -357,17 +606,5 @@ const factors: { title: string; text: string; icon: IconName }[] = [
   .svc-links a :global(.svc-links__chev) {
     margin-left: auto;
     color: var(--blue-500);
-  }
-
-  @media (min-width: 1025px) {
-    .coverage {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: var(--space-10);
-    }
-
-    .coverage__map {
-      position: sticky;
-      top: calc(var(--header-height) + var(--space-3));
-    }
   }
 </style>

@@ -5,8 +5,12 @@ import { config } from './config.ts';
 const DEFAULTS = {
   /** Admin switch for public enquiries (also requires ENQUIRIES_ENABLED=true). */
   'enquiries.accept': false as boolean,
-  /** Delete RESOLVED enquiries this many days after resolution. null = keep until deleted manually. */
-  'enquiries.retentionDays': null as number | null,
+  /**
+   * Retention policy for RESOLVED enquiries, in days after resolution. Nothing is deleted
+   * automatically: the inbox shows how many are past this age and an admin can delete them
+   * after a preview and confirmation.
+   */
+  'enquiries.retentionDays': 365 as number,
 };
 
 export type SettingKey = keyof typeof DEFAULTS;

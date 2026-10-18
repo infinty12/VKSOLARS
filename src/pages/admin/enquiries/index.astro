@@ -1,0 +1,208 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { listEnquiries, statusCounts, countPastRetention, ENQUIRY_STATUSES, STATUS_LABELS, type EnquiryFilter } from '../../../lib/server/enquiries.ts';
+import { enquiryGates, getSetting } from '../../../lib/server/settings.ts';
+import { flashFrom } from '../../../lib/server/http.ts';
+import { services } from '../../../data/services.ts';
+
+const sp = Astro.url.searchParams;
+const status = (ENQUIRY_STATUSES as readonly string[]).includes(sp.get('status') ?? '') ? sp.get('status')! : '';
+const filter: EnquiryFilter = { q: (sp.get('q') ?? '').slice(0, 100), status, page: Number(sp.get('page') ?? 1) || 1 };
+const result = listEnquiries(filter);
+const counts = statusCounts();
+const total = counts.new + counts.in_progress + counts.resolved;
+const gates = enquiryGates();
+const retentionDays = getSetting('enquiries.retentionDays');
+const pastRetention = countPastRetention(retentionDays);
+const serviceTitle: Record<string, string> = { ...Object.fromEntries(services.map((s) => [s.slug, s.title])), 'not-sure': 'Not sure' };
+const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+const flash = flashFrom(Astro.url);
+
+const href = (changes: Record<string, string | number | null>) => {
+  const u = new URLSearchParams(sp);
+  u.delete('msg');
+  for (const [k, v] of Object.entries(changes)) {
+    if (v === null || v === '') u.delete(k);
+    else u.set(k, String(v));
+  }
+  const s = u.toString();
+  return s ? `?${s}` : '/admin/enquiries';
+};
+const tabs = [{ key: '', label: 'All', count: total }, ...ENQUIRY_STATUSES.map((s) => ({ key: s, label: STATUS_LABELS[s], count: counts[s] }))];
+---
+
+<AdminLayout title="Enquiries" crumbs={[{ label: 'Enquiries' }]} flash={flash}>
+  <div class="enq-head">
+    <p class="enq-gate">
+      Public submissions:
+      {gates.open ? <span class="admin-badge admin-badge--on">Accepting</span> : <span class="admin-badge admin-badge--off">Off</span>}
+    </p>
+    <a href="/admin/enquiries/settings" class="admin-btn admin-btn--secondary">Enquiry settings</a>
+  </div>
+
+  {
+    pastRetention > 0 && (
+      <div class="admin-flash admin-flash--info" role="status">
+        <p>
+          {pastRetention} resolved {pastRetention === 1 ? 'enquiry is' : 'enquiries are'} older than your {retentionDays}-day retention
+          policy. Nothing is deleted automatically — <a href="/admin/enquiries/settings#retention">review and delete them</a>.
+        </p>
+      </div>
+    )
+  }
+
+  <nav class="enq-tabs" aria-label="Filter by status">
+    <ul role="list">
+      {
+        tabs.map((t) => (
+          <li>
+            <a href={href({ status: t.key || null, page: null })} aria-current={status === t.key ? 'page' : undefined}>
+              {t.label} <span class="enq-tabs__count mono">{t.count}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </nav>
+
+  <form method="get" class="admin-toolbar" role="search" aria-label="Search enquiries">
+    {status && <input type="hidden" name="status" value={status} />}
+    <div class="admin-field">
+      <label for="q">Search</label>
+      <input id="q" name="q" type="search" value={filter.q} placeholder="Name, phone, email, location, message or reference" />
+    </div>
+    <button type="submit" class="admin-btn admin-btn--secondary">Search</button>
+    {filter.q && <a href={href({ q: null, page: null })} class="admin-btn admin-btn--secondary">Clear</a>}
+  </form>
+
+  <p class="enq-count" role="status">{result.total} {result.total === 1 ? 'enquiry' : 'enquiries'}{filter.q || status ? ' match' : ''}</p>
+
+  {
+    result.total === 0 ? (
+      <div class="admin-card admin-empty">
+        <p>{filter.q || status ? 'No enquiries match.' : 'No enquiries yet.'}</p>
+      </div>
+    ) : (
+      <div class="admin-table-wrap">
+        <table class="admin-table admin-table--stack">
+          <caption class="sr-only">Enquiries, newest first</caption>
+          <thead>
+            <tr>
+              <th scope="col">From</th>
+              <th scope="col">Received</th>
+              <th scope="col">Service</th>
+              <th scope="col">Location</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.items.map((e) => (
+              <tr>
+                <th scope="row">
+                  <a href={`/admin/enquiries/${e.id}`}>{e.name}</a>
+                  <span class="enq-ref mono">{e.reference}</span>
+                </th>
+                <td data-label="Received">{fmt(e.createdAt)}</td>
+                <td data-label="Service">{serviceTitle[e.service] ?? e.service}</td>
+                <td data-label="Location">
+                  {e.location}
+                  {e.regionName ? `, ${e.regionName}` : ''}
+                </td>
+                <td data-label="Status">
+                  <span class:list={['admin-badge', `admin-badge--${e.status}`]}>{STATUS_LABELS[e.status]}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  {
+    result.pages > 1 && (
+      <nav class="admin-pager" aria-label="Pagination">
+        <span>
+          Page {result.page} of {result.pages}
+        </span>
+        <span>
+          {result.page > 1 && <a href={href({ page: result.page - 1 })} class="admin-btn admin-btn--secondary">Previous</a>}
+          {result.page < result.pages && <a href={href({ page: result.page + 1 })} class="admin-btn admin-btn--secondary">Next</a>}
+        </span>
+      </nav>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .enq-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+
+  .enq-gate {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--fs-sm);
+  }
+
+  .enq-tabs {
+    margin-bottom: var(--space-2);
+    overflow-x: auto;
+  }
+
+  .enq-tabs ul {
+    display: flex;
+    gap: var(--space-0-5);
+    border-bottom: var(--border-thin);
+  }
+
+  .enq-tabs a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: var(--target-min);
+    padding-inline: var(--space-2);
+    border-bottom: 3px solid transparent;
+    color: var(--text-secondary);
+    font-weight: var(--fw-semibold);
+    font-size: var(--fs-sm);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .enq-tabs a:hover {
+    color: var(--brand-solar);
+  }
+
+  .enq-tabs a[aria-current='page'] {
+    color: var(--brand-solar);
+    border-bottom-color: var(--brand-solar);
+  }
+
+  .enq-tabs__count {
+    padding: 0 8px;
+    border-radius: var(--radius-pill);
+    background: var(--ice-100);
+    font-size: var(--fs-xs);
+  }
+
+  .enq-count {
+    margin-bottom: var(--space-1);
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+  }
+
+  .enq-ref {
+    display: block;
+    margin-top: 2px;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-regular);
+    color: var(--text-supporting);
+  }
+</style>
