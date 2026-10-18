@@ -1,0 +1,96 @@
+---
+// Email notification status for admins. Shows status, problems (descriptions only), transport,
+// recipients and delivery counts — never SMTP usernames, passwords or message contents.
+import { publicMailStatus } from '../../lib/server/mail-config.ts';
+import { outboxCounts } from '../../lib/server/notifications.ts';
+
+const mail = publicMailStatus();
+const counts = outboxCounts();
+const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+const label = { disabled: 'Off', ready: 'Ready', misconfigured: 'Misconfigured' }[mail.status];
+const badge = { disabled: 'off', ready: 'on', misconfigured: 'new' }[mail.status];
+---
+
+<section class="admin-card mail-status" aria-labelledby="mail-title">
+  <h2 id="mail-title">Email notifications</h2>
+  <p class="mail-status__line">
+    Status: <span class:list={['admin-badge', `admin-badge--${badge}`]}>{label}</span>
+  </p>
+  {
+    mail.status === 'disabled' && (
+      <p class="admin-hint">
+        No emails are sent. Enquiries are still stored and shown in the inbox. To enable notifications, set <code>MAIL_ENABLED=true</code> and
+        the SMTP settings in <code>.env</code> (see README), then restart the server.
+      </p>
+    )
+  }
+  {
+    mail.status === 'misconfigured' && (
+      <div class="admin-flash admin-flash--error" role="alert">
+        <div>
+          <p>Email is enabled but the configuration is incomplete, so nothing is sent:</p>
+          <ul>{mail.problems.map((p) => <li>{p}</li>)}</ul>
+        </div>
+      </div>
+    )
+  }
+  {
+    mail.status !== 'disabled' && (
+      <dl class="mail-status__dl">
+        <div><dt>Transport</dt><dd>{mail.transport === 'mock' ? 'Test mock (no real email)' : `SMTP${mail.smtpHost ? ` via ${mail.smtpHost}` : ''}`}</dd></div>
+        <div><dt>Recipients</dt><dd>{mail.recipients.length ? mail.recipients.join(', ') : '—'}</dd></div>
+        <div><dt>Customer details in email</dt><dd>{mail.includeDetails ? 'Included' : 'Not included (reference and admin link only)'}</dd></div>
+      </dl>
+    )
+  }
+  <dl class="mail-status__counts">
+    <div><dt>Sent</dt><dd class="mono">{counts.sent}</dd></div>
+    <div><dt>Waiting / retrying</dt><dd class="mono">{counts.pending + counts.sending}</dd></div>
+    <div><dt>Failed</dt><dd class="mono">{counts.failed}</dd></div>
+  </dl>
+  {counts.lastError && <p class="admin-hint">Most recent problem: <code>{counts.lastError.e}</code> ({fmt(counts.lastError.at)})</p>}
+</section>
+
+<style>
+  .mail-status__line {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-bottom: var(--space-1-5);
+  }
+
+  .mail-status ul {
+    margin-top: var(--space-0-5);
+    padding-left: var(--space-3);
+    list-style: disc;
+  }
+
+  .mail-status__dl,
+  .mail-status__counts {
+    display: grid;
+    gap: var(--space-1);
+    margin-block: var(--space-2);
+  }
+
+  .mail-status__counts {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+
+  .mail-status__dl > div,
+  .mail-status__counts > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .mail-status dt {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    color: var(--text-secondary);
+  }
+
+  .mail-status__counts dd {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--brand-solar);
+  }
+</style>

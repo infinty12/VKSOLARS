@@ -11,6 +11,7 @@ import { audit } from './audit.ts';
 import { sign, safeEqual } from './secret.ts';
 import { ENQUIRY_LIMIT } from './config.ts';
 import { CONSENT_TEXT, type EnquiryValues } from '../enquiry.ts';
+import { enqueueEnquiryNotification, kickOutbox } from './notifications.ts';
 
 export const ENQUIRY_STATUSES = ['new', 'in_progress', 'resolved'] as const;
 export type EnquiryStatus = (typeof ENQUIRY_STATUSES)[number];
@@ -68,14 +69,25 @@ export function createEnquiry(v: EnquiryValues): { id: number; reference: string
   for (let attempt = 0; attempt < 5; attempt++) {
     const reference = newReference();
     try {
-      const res = getDb()
-        .prepare(
-          `INSERT INTO enquiries (reference, created_at, updated_at, name, phone, email, service, region_id, location, message, consent, consent_text, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'new')`,
-        )
-        .run(reference, now, now, v.name, v.phone, v.email, v.service, regionId, v.location, v.message, CONSENT_TEXT);
-      const id = Number(res.lastInsertRowid);
+      // The enquiry and its notification (if email is enabled) commit together; sending happens
+      // afterwards, so a mail problem can never undo or hide a stored enquiry.
+      const id = transaction(() => {
+        const res = getDb()
+          .prepare(
+            `INSERT INTO enquiries (reference, created_at, updated_at, name, phone, email, service, region_id, location, message, consent, consent_text, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'new')`,
+          )
+          .run(reference, now, now, v.name, v.phone, v.email, v.service, regionId, v.location, v.message, CONSENT_TEXT);
+        const newId = Number(res.lastInsertRowid);
+        enqueueEnquiryNotification(newId);
+        return newId;
+      });
       audit('enquiry.received', { targetType: 'enquiry', targetId: id });
+      try {
+        kickOutbox();
+      } catch {
+        // Scheduling problems must never affect the stored enquiry; the timer retries later.
+      }
       return { id, reference };
     } catch (err) {
       // Retry only on a (very unlikely) reference collision.

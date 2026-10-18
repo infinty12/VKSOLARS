@@ -4,7 +4,8 @@ Website for VK Solar: solar panel cleaning, preventive maintenance, AI drone ins
 local admin panel for **service-area coverage across India** and an **enquiry inbox**.
 
 **Stack:** [Astro 7.4](https://astro.build) with the Node adapter (`@astrojs/node`) · TypeScript (strict) · SQLite via
-Node’s built-in `node:sqlite` · plain CSS design tokens · Playwright + axe-core tests.
+Node’s built-in `node:sqlite` · Nodemailer (optional email notifications) · Sharp (image validation) · plain CSS design
+tokens · Playwright, axe-core and `node:test` tests.
 
 - Content pages (`/`, `/services`, `/ai-drone-inspection`, `/about`, 404) are **pre-rendered** static HTML.
 - `/service-areas`, `/contact`, `/api/enquiries` and `/admin/**` are **server-rendered** and read the database.
@@ -50,7 +51,8 @@ Stop the server with **Ctrl+C**. To restart after code changes: `npm run build`,
 | `npm run links` | Broken links, missing `#anchors` and `href="#"` placeholders in the snapshot |
 | `npm run validate:html` | html-validate over the snapshot |
 | `npm run seo` | Titles, descriptions, one `<h1>`, Open Graph, canonical, robots and sitemap in the snapshot |
-| `npm run smoke:admin` | Security smoke test of admin, sessions, CSRF, local-only access and the enquiry endpoint |
+| `npm run test:unit` | Unit/integration tests (`node:test`): mail configuration, notification outbox, image validation |
+| `npm run smoke:admin` | Security smoke test of admin, sessions, CSRF, local-only access, the enquiry endpoint and email (mock) |
 | `npm run test` | Playwright suite (starts its own servers with disposable storage; run `npm run build` first) |
 | `npm run verify` | All of the above in order |
 
@@ -72,6 +74,7 @@ are wiped on every run and excluded from Git.
 | `COOKIE_SECURE` | Force `Secure` cookies (set when served over HTTPS behind a TLS proxy) | off |
 | `TRUST_PROXY` | Trust `X-Forwarded-*` headers (only behind a proxy you control) | off |
 | `ENQUIRY_RATE_LIMIT_PER_IP` / `_GLOBAL`, `ENQUIRY_MIN_FILL_MS` | Spam limits; defaults 5 per 10 min per address, 100 per hour site-wide, 3 s minimum | — |
+| `MAIL_ENABLED`, `MAIL_TRANSPORT`, `MAIL_TO`, `MAIL_FROM`, `SMTP_*`, `MAIL_INCLUDE_DETAILS`, `ADMIN_BASE_URL` | Email notifications — see [Email notifications](#email-notifications) | off |
 
 `.env`, `storage/` and all databases are excluded from Git. Never commit them.
 
@@ -112,7 +115,7 @@ are rejected. The public `/service-areas` page has search and a state filter tha
 ### Enquiries
 
 The contact form posts to `POST /api/enquiries`, which stores enquiries in the local database for the admin inbox.
-**No email is sent and no third-party service is used.**
+Optional email notifications are described [below](#email-notifications); they are off by default.
 
 **Submissions are off by default.** They are accepted only when **both** are on:
 
@@ -144,6 +147,57 @@ policy, and an admin deletes them after a preview of the exact count and a confi
 New and In-progress enquiries are never affected. Delete individual enquiries at any time when the details are no longer
 needed or the person asks.
 
+### Email notifications
+
+**Off by default and not yet configured.** No SMTP credentials exist in this project, and no real email has been sent from
+it. Enable only after the recipient mailbox is confirmed.
+
+How it works (`src/lib/server/notifications.ts`):
+
+1. When an enquiry is accepted, the enquiry and an *outbox* row are saved in **one database transaction**. The visitor’s
+   “received” message depends only on that save.
+2. The email is sent **afterwards** (immediately, then by a once-a-minute background timer). If sending fails it is
+   retried after 1, 5, 15 and 60 minutes, then marked **failed**. A mail failure can never lose an enquiry or make the site
+   claim it wasn’t stored.
+3. If an enquiry is deleted before its email is sent, the email is cancelled.
+
+**Privacy:** by default the email contains only the reference, time, service, state/UT and a link to the enquiry in the
+admin — no name, phone, email, location or message. Set `MAIL_INCLUDE_DETAILS=true` to include them. Customer data never
+goes in the subject or other headers. Logs and the database record only short error categories (`auth_failed`,
+`connection_failed`, …), never message contents, addresses or credentials.
+
+**Status:** Admin → Enquiries → Enquiry settings shows whether email is Off / Ready / Misconfigured (with the problems, but
+never the configured values), the recipients, and sent / retrying / failed counts.
+
+**To set it up later** (Gmail example, for the intended mailbox `vksolar.contact@gmail.com` — verify it first):
+
+1. In that Google account turn on 2-Step Verification and create an **App password**.
+2. In `.env`: `MAIL_ENABLED=true`, `MAIL_TRANSPORT=smtp`, `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`,
+   `SMTP_USER=<the Gmail address>`, `SMTP_PASS=<the app password>`, `MAIL_FROM=<the Gmail address>`,
+   `MAIL_TO=vksolar.contact@gmail.com`.
+3. Restart `npm start`, open Enquiry settings and check the status says **Ready**, then send one test enquiry and confirm
+   it arrives (and check the spam folder).
+
+`.env` is never committed. Credentials are read only by the server and never reach browser code, logs or admin pages.
+
+### Image uploads (foundation only)
+
+There is **no image upload feature yet** (no upload page, media library or public image route). `src/lib/server/images.ts`
+provides the safe processing every future upload must use:
+
+- size limit **before** decoding (8 MB); the format is detected by Sharp from the file’s bytes — never trusted from the file
+  name or the browser’s MIME type (a mismatch is rejected);
+- only **JPEG, PNG, WebP and AVIF**; **SVG is always refused** (it can contain script), as are GIF, TIFF, HEIC and others;
+- 16–8000 px per side, at most 40 megapixels (decompression-bomb protection), no animated/multi-page images;
+- every accepted image is fully decoded and **re-encoded to WebP** — EXIF orientation applied, all metadata (including GPS
+  location) removed, long side capped at 2560 px, plus a 480 px thumbnail; the original bytes are discarded;
+- files are stored as `<random-uuid>.webp` in `STORAGE_DIR/uploads` (outside `public/` and `dist/`, so never served or
+  executed directly), never overwritten, and looked up only by exact generated names (no path traversal).
+
+Still needed before uploads can be offered: an authenticated admin upload form (multipart, with the request-size limit
+enforced before reading), a `media` database table (alt text, owner, dimensions), a route that serves images from
+`STORAGE_DIR/uploads` with correct headers, and deletion/usage tracking.
+
 ## Database, migrations and backups
 
 - File: `storage\vk-solar.db` (SQLite, WAL mode). Migrations live in `src/lib/server/migrations.ts` and are applied in
@@ -155,7 +209,8 @@ needed or the person asks.
   Copy-Item -Recurse storage "backups\storage-$(Get-Date -Format yyyyMMdd-HHmmss)"
   ```
 
-  The folder contains customer enquiries — keep backups private and out of Git (`backups/` is ignored).
+  The folder contains customer enquiries (and, later, uploaded images) — keep backups private and out of Git (`backups/`
+  is ignored). It does not contain SMTP credentials; those live only in `.env`.
 - **Restore:** stop the server, move the current `storage` aside, copy the backup folder back to `storage`, run
   `npm run db:migrate`, then `npm start`.
 - A built-in backup/restore command is not part of this stage yet.

@@ -14,6 +14,7 @@ import { defineMiddleware } from 'astro:middleware';
 import { config, SESSION } from './lib/server/config.ts';
 import { readSession } from './lib/server/auth.ts';
 import { safeEqual } from './lib/server/secret.ts';
+import { ensureOutboxWorker, kickOutbox } from './lib/server/notifications.ts';
 
 const isAdminPath = (p: string) => p === '/admin' || p.startsWith('/admin/') || p.startsWith('/api/admin/');
 const PUBLIC_ADMIN_PATHS = new Set(['/admin/login', '/admin/login/']);
@@ -24,8 +25,21 @@ function isLoopback(addr: string) {
 
 const notFound = () => new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain' } });
 
+let outboxStarted = false;
+
 export const onRequest = defineMiddleware(async (context, next) => {
   if (context.isPrerendered) return next();
+
+  // Resume pending email notifications after a restart (no-op when email is disabled).
+  if (!outboxStarted) {
+    outboxStarted = true;
+    try {
+      ensureOutboxWorker();
+      kickOutbox();
+    } catch {
+      console.warn('[mail] could not start the notification worker');
+    }
+  }
 
   const path = context.url.pathname;
   if (!isAdminPath(path)) return next();

@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import Csrf from '../../../components/admin/Csrf.astro';
+import MailStatus from '../../../components/admin/MailStatus.astro';
 import { enquiryGates, getSetting, setSetting } from '../../../lib/server/settings.ts';
 import { countPastRetention, purgePastRetention } from '../../../lib/server/enquiries.ts';
 import { audit } from '../../../lib/server/audit.ts';
@@ -84,6 +85,10 @@ const flash = actionError ? { kind: 'error' as const, text: actionError } : flas
     </form>
   </section>
 
+  <div class="set-card set-mail">
+    <MailStatus />
+  </div>
+
   <section class="admin-card set-card" id="retention" aria-labelledby="retention-title">
     <h2 id="retention-title">Retention</h2>
     <p>
@@ -138,6 +143,10 @@ const flash = actionError ? { kind: 'error' as const, text: actionError } : flas
 
   .set-card > p {
     color: var(--text-secondary);
+  }
+
+  .set-mail {
+    margin-block: var(--space-3);
   }
 
   .set-gates {

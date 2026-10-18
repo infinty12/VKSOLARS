@@ -206,6 +206,28 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_notes_enquiry ON enquiry_notes(enquiry_id);
     `,
   },
+  {
+    id: 5,
+    name: 'notification outbox for enquiry emails',
+    // Written in the same transaction as the enquiry, sent afterwards. A mail failure can only
+    // change a row here — never the enquiry. last_error holds a short category, never a message
+    // body, address or credential.
+    sql: `
+      CREATE TABLE notification_outbox (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind TEXT NOT NULL CHECK (kind IN ('enquiry.new')),
+        enquiry_id INTEGER REFERENCES enquiries(id) ON DELETE SET NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'cancelled')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at INTEGER NOT NULL,      -- epoch ms
+        last_error TEXT,                       -- category only, e.g. 'auth_failed'
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        sent_at TEXT
+      );
+      CREATE INDEX idx_outbox_due ON notification_outbox(status, next_attempt_at);
+    `,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].id;

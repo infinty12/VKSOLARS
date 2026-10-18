@@ -5,7 +5,7 @@
 //   A: default settings (local-only, forwarding headers ignored)
 //   B: TRUST_PROXY=true, to exercise the non-loopback rejection path via a forwarded client IP
 import { spawn } from 'node:child_process';
-import { readFileSync, rmSync } from 'node:fs';
+import { readFileSync, rmSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
@@ -62,7 +62,15 @@ try {
   const a = startServer(A.port, A.storage);
   const b = startServer(B.port, B.storage, { TRUST_PROXY: 'true' });
   // C: enquiries OPEN with the DEFAULT (strict) rate limit and minimum fill time.
-  const c = startServer(C.port, C.storage, { ENQUIRIES_ENABLED: 'true', TEST_ACCEPT_ENQUIRIES: 'true' });
+  // Email notifications ON with the test-only mock transport (writes to <storage>/mail-outbox).
+  const MAIL_ENV = {
+    MAIL_ENABLED: 'true',
+    MAIL_TRANSPORT: 'mock',
+    MAIL_FROM: 'website@example.com',
+    MAIL_TO: 'owner@example.com',
+    SMTP_PASS: 'smoke-test-password-must-never-appear',
+  };
+  const c = startServer(C.port, C.storage, { ENQUIRIES_ENABLED: 'true', TEST_ACCEPT_ENQUIRIES: 'true', ...MAIL_ENV });
   servers.push(a.child, b.child, c.child);
   await Promise.all([a.ready, b.ready, c.ready]);
   const base = `http://127.0.0.1:${A.port}`;
@@ -261,6 +269,30 @@ try {
   });
   check('closed server (ENQUIRIES_ENABLED unset) → 503 disabled', closed.status === 503 && (await codeOf(closed)) === 'disabled', String(closed.status));
 
+  // Email notifications (mock transport): one message per stored enquiry, no personal data.
+  const outboxDir = join(C.storage, 'mail-outbox');
+  let mails = [];
+  for (let i = 0; i < 20 && mails.length < 5; i++) {
+    await new Promise((res) => setTimeout(res, 250));
+    mails = existsSync(outboxDir) ? readdirSync(outboxDir).map((f) => JSON.parse(readFileSync(join(outboxDir, f), 'utf8'))) : [];
+  }
+  check('one notification email per stored enquiry (5), sent after storage', mails.length === 5, `${mails.length} emails`);
+  const mailText = JSON.stringify(mails);
+  check('notification emails contain references and an admin link', mails.every((m) => /ENQ-\d{8}-[0-9A-F]{6}/.test(m.subject) && m.text.includes('/admin/enquiries/')));
+  check('notification emails contain no customer name, phone, email, location or message', !/Smoke Customer|Form Post Customer|9876543210|smoke@example\.com|Panaji|Smoke test/.test(mailText));
+  {
+    const d = new DatabaseSync(join(C.storage, 'vk-solar.db'), { readOnly: true });
+    const statuses = d.prepare('SELECT status, COUNT(*) AS n FROM notification_outbox GROUP BY status').all();
+    d.close();
+    check('outbox rows all marked sent', statuses.length === 1 && statuses[0].status === 'sent' && statuses[0].n === 5, JSON.stringify(statuses));
+  }
+  {
+    const d = new DatabaseSync(join(A.storage, 'vk-solar.db'), { readOnly: true });
+    const n = d.prepare('SELECT COUNT(*) AS n FROM notification_outbox').get().n;
+    d.close();
+    check('server with email disabled queues no notifications', n === 0, `${n} rows`);
+  }
+
   // Retention: an old resolved enquiry is reported, and deleted only after confirmation of the previewed count.
   {
     const d = new DatabaseSync(join(C.storage, 'vk-solar.db'));
@@ -275,6 +307,8 @@ try {
   const settingsPage = await fetch(`${baseC}/admin/enquiries/settings`, { headers: { Cookie: `vk_admin_session=${sc.value}` } });
   const settingsHtml = await settingsPage.text();
   check('settings shows 1 resolved enquiry past the 365-day policy', settingsHtml.includes('1 resolved enquiry was resolved more than 365 days ago'));
+  check('settings shows email status Ready with the mock transport and 5 sent', settingsHtml.includes('>Ready<') && settingsHtml.includes('Test mock (no real email)'));
+  check('admin pages never show the SMTP password', !settingsHtml.includes(MAIL_ENV.SMTP_PASS));
   const csrfC = tokenIn(settingsHtml);
   const purgeTooFew = await fetch(`${baseC}/admin/enquiries/settings`, {
     method: 'POST',
@@ -301,7 +335,7 @@ try {
   const exitedC = exited(c.child);
   c.child.kill();
   await exitedC;
-  const c2 = startServer(C.port, C.storage, { KEEP_STORAGE: 'true', ENQUIRIES_ENABLED: 'true', TEST_ACCEPT_ENQUIRIES: 'true' });
+  const c2 = startServer(C.port, C.storage, { KEEP_STORAGE: 'true', ENQUIRIES_ENABLED: 'true', TEST_ACCEPT_ENQUIRIES: 'true', ...MAIL_ENV });
   servers.push(c2.child);
   await c2.ready;
   const inbox = await fetch(`${baseC}/admin/enquiries?q=Form%20Post%20Customer`, { headers: { Cookie: `vk_admin_session=${sc.value}` } });
