@@ -15,6 +15,10 @@ import { config, SESSION } from './lib/server/config.ts';
 import { readSession } from './lib/server/auth.ts';
 import { safeEqual } from './lib/server/secret.ts';
 import { ensureOutboxWorker, kickOutbox } from './lib/server/notifications.ts';
+import { MEDIA } from './lib/server/media.ts';
+
+/** Largest admin form post other than an image upload. */
+const ADMIN_MAX_BODY_BYTES = 256 * 1024;
 
 const isAdminPath = (p: string) => p === '/admin' || p.startsWith('/admin/') || p.startsWith('/api/admin/');
 const PUBLIC_ADMIN_PATHS = new Set(['/admin/login', '/admin/login/']);
@@ -67,6 +71,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // 3. CSRF for state-changing requests (login has its own double-submit check).
   const method = context.request.method;
   if (session && method !== 'GET' && method !== 'HEAD') {
+    // Refuse oversized bodies before reading them (server.mjs enforces the same limits first).
+    const lengthHeader = context.request.headers.get('content-length');
+    const limit = path === '/admin/media' || path === '/admin/media/' ? MEDIA.maxRequestBytes : ADMIN_MAX_BODY_BYTES;
+    const tooBig = lengthHeader !== null && !(Number(lengthHeader) <= limit);
+    const unknownLength = lengthHeader === null && context.request.headers.has('transfer-encoding');
+    if (tooBig || unknownLength) {
+      return new Response(tooBig ? 'Request too large.' : 'Content-Length required.', {
+        status: tooBig ? 413 : 411,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    }
     let token = context.request.headers.get('x-csrf-token') ?? '';
     if (!token) {
       const type = context.request.headers.get('content-type') ?? '';

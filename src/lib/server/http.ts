@@ -39,6 +39,8 @@ export const FLASH = {
   note: { kind: 'success', text: 'Note added.' },
   purged: { kind: 'success', text: 'Retention clean-up finished.' },
   backup: { kind: 'success', text: 'Backup created and verified.' },
+  uploaded: { kind: 'success', text: 'Image uploaded. Check the alt text describes it before using it on the site.' },
+  inuse: { kind: 'error', text: 'This image is in use, so it cannot be deleted. Remove it from those places first.' },
   notfound: { kind: 'error', text: 'That item no longer exists.' },
 } as const satisfies Record<string, { kind: 'success' | 'error' | 'info'; text: string }>;
 

@@ -1,0 +1,222 @@
+---
+// One media item: preview, details, alt text, where it is used, and deletion (only when unused).
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Csrf from '../../../components/admin/Csrf.astro';
+import { getMedia, updateAltText, deleteMedia, listUsages, mediaUrl, MEDIA } from '../../../lib/server/media.ts';
+import { flashFrom } from '../../../lib/server/http.ts';
+
+const id = Number(Astro.params.id);
+const userId = Astro.locals.admin!.user.id;
+let item = getMedia(id);
+if (!item) return Astro.redirect('/admin/media?msg=notfound', 303);
+
+let actionError: string | null = null;
+let draftAlt: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('_action') ?? '');
+  if (action === 'alt') {
+    draftAlt = String(form.get('alt') ?? '').slice(0, MEDIA.altMax + 50);
+    const r = updateAltText(id, draftAlt, userId);
+    if (r.ok) return Astro.redirect(`/admin/media/${id}?msg=saved`, 303);
+    actionError = r.error;
+    Astro.response.status = 422;
+  } else if (action === 'delete') {
+    const r = deleteMedia(id, userId);
+    if (r.ok) return Astro.redirect('/admin/media?msg=deleted', 303);
+    if (r.reason === 'not_found') return Astro.redirect('/admin/media?msg=notfound', 303);
+    return Astro.redirect(`/admin/media/${id}?msg=inuse`, 303);
+  } else {
+    actionError = 'Unknown action.';
+    Astro.response.status = 422;
+  }
+  item = getMedia(id)!;
+}
+
+const usages = listUsages(id);
+const label = item.originalName || `Image ${item.uid.slice(0, 8)}`;
+const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+const kb = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+const flash = actionError ? { kind: 'error' as const, text: actionError } : flashFrom(Astro.url);
+const url = mediaUrl(item.uid);
+---
+
+<AdminLayout title={label} crumbs={[{ label: 'Media', href: '/admin/media' }, { label }]} flash={flash}>
+  <div class="mdd-layout">
+    <section class="admin-card mdd-preview" aria-labelledby="mdd-preview-title">
+      <h2 id="mdd-preview-title" class="sr-only">Preview</h2>
+      <img src={url} width={item.width} height={item.height} alt={item.altText} />
+    </section>
+
+    <div class="mdd-side">
+      <section class="admin-card" aria-labelledby="mdd-alt-title">
+        <h2 id="mdd-alt-title">Alt text</h2>
+        <form method="post" class="mdd-form" data-unsaved-warning>
+          <Csrf />
+          <input type="hidden" name="_action" value="alt" />
+          <div class="admin-field">
+            <label for="mdd-alt">Description of the image</label>
+            <textarea id="mdd-alt" name="alt" maxlength={MEDIA.altMax} aria-describedby="mdd-alt-hint" aria-invalid={actionError ? 'true' : undefined}
+              >{draftAlt ?? item.altText}</textarea
+            >
+            <p class="admin-hint" id="mdd-alt-hint">
+              Up to {MEDIA.altMax} characters. Describe what matters in the picture. Leave empty only if the image is purely decorative.
+            </p>
+          </div>
+          <button type="submit" class="admin-btn admin-btn--primary">Save alt text</button>
+        </form>
+      </section>
+
+      <section class="admin-card" aria-labelledby="mdd-details-title">
+        <h2 id="mdd-details-title">Details</h2>
+        <dl class="mdd-dl">
+          <div><dt>Original file name</dt><dd>{item.originalName || <span class="mdd-muted">Not recorded</span>}</dd></div>
+          <div><dt>Stored as</dt><dd class="mono">{item.uid}.webp</dd></div>
+          <div><dt>Dimensions</dt><dd>{item.width} × {item.height} px</dd></div>
+          <div><dt>Size</dt><dd>{kb(item.bytes)} (thumbnail {kb(item.thumbBytes)})</dd></div>
+          <div><dt>Type</dt><dd>{item.mimeType} (uploaded as {item.sourceFormat.toUpperCase()})</dd></div>
+          <div><dt>Uploaded</dt><dd>{fmt(item.createdAt)}{item.uploadedBy ? ` by ${item.uploadedBy}` : ''}</dd></div>
+          <div><dt>Last changed</dt><dd>{fmt(item.updatedAt)}</dd></div>
+          <div>
+            <dt><label for="mdd-url">Image address</label></dt>
+            <dd><input id="mdd-url" class="mdd-url mono" type="text" readonly value={url} /></dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="admin-card" aria-labelledby="mdd-usage-title">
+        <h2 id="mdd-usage-title">Where it is used</h2>
+        {
+          usages.length === 0 ? (
+            <p class="mdd-muted">Not used anywhere on the site.</p>
+          ) : (
+            <ul class="mdd-usages" role="list">
+              {usages.map((u) => (
+                <li>
+                  <span class="mono">{u.usageType}</span> — {u.usageKey}
+                </li>
+              ))}
+            </ul>
+          )
+        }
+      </section>
+
+      <section class="admin-card mdd-danger" aria-labelledby="mdd-delete-title">
+        <h2 id="mdd-delete-title">Delete</h2>
+        {
+          usages.length > 0 ? (
+            <p class="admin-hint" id="mdd-delete-hint">
+              This image is in use in {usages.length} {usages.length === 1 ? 'place' : 'places'}, so it can’t be deleted. Remove it from those places first.
+            </p>
+          ) : (
+            <p class="admin-hint" id="mdd-delete-hint">
+              Permanently removes the image and its thumbnail. Any copy saved in an earlier backup is not affected.
+            </p>
+          )
+        }
+        <form method="post" data-confirm={`Permanently delete “${label}”? This cannot be undone.`}>
+          <Csrf />
+          <input type="hidden" name="_action" value="delete" />
+          <button type="submit" class="admin-btn admin-btn--danger" disabled={usages.length > 0} aria-describedby="mdd-delete-hint">Delete image</button>
+        </form>
+      </section>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .mdd-layout {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .mdd-layout .admin-card + .admin-card {
+    margin-top: 0;
+  }
+
+  .mdd-side {
+    display: grid;
+    gap: var(--space-3);
+    align-content: start;
+  }
+
+  .mdd-preview {
+    align-self: start;
+  }
+
+  .mdd-preview img {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: 70vh;
+    margin-inline: auto;
+    background: var(--ice-50);
+  }
+
+  .mdd-form {
+    display: grid;
+    gap: var(--space-1-5);
+    justify-items: start;
+    margin-top: var(--space-2);
+  }
+
+  .mdd-form .admin-field {
+    width: 100%;
+  }
+
+  .mdd-dl {
+    display: grid;
+    gap: var(--space-1-5);
+    margin-top: var(--space-1-5);
+  }
+
+  .mdd-dl > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .mdd-dl dt {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .mdd-dl dd {
+    overflow-wrap: anywhere;
+  }
+
+  .mdd-url {
+    width: 100%;
+    min-height: var(--target-min);
+    padding: 0.5rem 0.75rem;
+    border: 1.5px solid var(--color-border-control);
+    border-radius: var(--radius-md);
+    background: var(--ice-50);
+    font-size: var(--fs-sm);
+  }
+
+  .mdd-muted {
+    color: var(--text-supporting);
+  }
+
+  .mdd-usages {
+    display: grid;
+    gap: 4px;
+    margin-top: var(--space-1);
+    overflow-wrap: anywhere;
+  }
+
+  .mdd-danger form {
+    margin-top: var(--space-1-5);
+  }
+
+  @media (min-width: 1100px) {
+    .mdd-layout {
+      grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+    }
+  }
+</style>

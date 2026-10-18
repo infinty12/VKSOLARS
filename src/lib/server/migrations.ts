@@ -228,6 +228,41 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_outbox_due ON notification_outbox(status, next_attempt_at);
     `,
   },
+  {
+    id: 6,
+    name: 'media library and media usage tracking',
+    // uid is the random server-generated file id (<uid>.webp / <uid>-thumb.webp in
+    // STORAGE_DIR/uploads). original_name is a sanitised display label only, never a path.
+    // media_usages blocks deleting an image that is in use (ON DELETE RESTRICT).
+    sql: `
+      CREATE TABLE media (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uid TEXT NOT NULL UNIQUE CHECK (length(uid) = 36),
+        original_name TEXT NOT NULL DEFAULT '',
+        mime_type TEXT NOT NULL DEFAULT 'image/webp' CHECK (mime_type IN ('image/webp')),
+        source_format TEXT NOT NULL CHECK (source_format IN ('jpeg', 'png', 'webp', 'avif')),
+        width INTEGER NOT NULL CHECK (width > 0),
+        height INTEGER NOT NULL CHECK (height > 0),
+        bytes INTEGER NOT NULL CHECK (bytes > 0),
+        thumb_bytes INTEGER NOT NULL DEFAULT 0,
+        alt_text TEXT NOT NULL DEFAULT '',
+        uploaded_by INTEGER REFERENCES admin_users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_media_created ON media(created_at);
+
+      CREATE TABLE media_usages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE RESTRICT,
+        usage_type TEXT NOT NULL,
+        usage_key TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (media_id, usage_type, usage_key)
+      );
+      CREATE INDEX idx_media_usages_media ON media_usages(media_id);
+    `,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].id;

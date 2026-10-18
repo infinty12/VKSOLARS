@@ -181,10 +181,9 @@ never the configured values), the recipients, and sent / retrying / failed count
 
 `.env` is never committed. Credentials are read only by the server and never reach browser code, logs or admin pages.
 
-### Image uploads (foundation only)
+### Media library (Admin → Media)
 
-There is **no image upload feature yet** (no upload page, media library or public image route). `src/lib/server/images.ts`
-provides the safe processing every future upload must use:
+Upload, browse, search and manage images. Every upload goes through `src/lib/server/images.ts`:
 
 - size limit **before** decoding (8 MB); the format is detected by Sharp from the file’s bytes — never trusted from the file
   name or the browser’s MIME type (a mismatch is rejected);
@@ -192,12 +191,27 @@ provides the safe processing every future upload must use:
 - 16–8000 px per side, at most 40 megapixels (decompression-bomb protection), no animated/multi-page images;
 - every accepted image is fully decoded and **re-encoded to WebP** — EXIF orientation applied, all metadata (including GPS
   location) removed, long side capped at 2560 px, plus a 480 px thumbnail; the original bytes are discarded;
-- files are stored as `<random-uuid>.webp` in `STORAGE_DIR/uploads` (outside `public/` and `dist/`, so never served or
-  executed directly), never overwritten, and looked up only by exact generated names (no path traversal).
+- files are stored as `<random-uuid>.webp` in `STORAGE_DIR/uploads` (outside `public/` and `dist/`), never overwritten.
 
-Still needed before uploads can be offered: an authenticated admin upload form (multipart, with the request-size limit
-enforced before reading), a `media` database table (alt text, owner, dimensions), a route that serves images from
-`STORAGE_DIR/uploads` with correct headers, and deletion/usage tracking.
+On top of that:
+
+- **Request size** is checked from `Content-Length` before any of the body is read: about 8.25 MB for the upload form, 1 MB
+  for other requests (`server.mjs`) and 256 KB for other admin forms (middleware). Sign-in and the CSRF token are required as for every admin
+  form, and each administrator may upload at most 30 images per 10 minutes.
+- The uploaded **file name** is kept only as a display label (last path segment, control characters removed, 120
+  characters max). It is never used for a path, URL or header.
+- **Alt text** (up to 250 characters, plain text) can be added at upload and edited later; images without it are flagged.
+- **Serving:** `/media/<uuid>.webp` (and `-thumb.webp`) serves a file only if the name is exactly a generated uuid name
+  **and** that image is registered in the library. Nothing else in the storage folder can be requested. Responses are
+  `image/webp` with `nosniff` and a locked-down CSP. These addresses are public (anyone with the link can view the
+  image), so don’t upload private pictures.
+- **Usage tracking and deletion:** the `media_usages` table records where an image is used. An image in use can’t be
+  deleted (the database enforces this as well); unused images are deleted only after confirmation. Nothing on the current
+  website uses library images yet — the existing pictures in `public/` are unaffected. The future content editor will record
+  usages when it places an image.
+- **Audit log:** uploads (format, dimensions, size), rejected uploads (reason only), alt-text changes (length only) and
+  deletions are recorded by id — never image bytes, alt text or file names.
+- Images are included in backups (`storage/uploads` plus the `media` table).
 
 ## Database, migrations and backups
 

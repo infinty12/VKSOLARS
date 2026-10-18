@@ -1,0 +1,264 @@
+---
+// Media library: upload, search and browse images. Upload processing (validation, re-encoding,
+// storage) lives in lib/server/media.ts → images.ts. The request size is capped before the body
+// is read (server.mjs + middleware); auth and CSRF are enforced by the middleware.
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Csrf from '../../../components/admin/Csrf.astro';
+import { listMedia, uploadMedia, uploadRateLimit, mediaUrl, thumbSize, MEDIA } from '../../../lib/server/media.ts';
+import { IMAGE_LIMITS, REJECTION_MESSAGES } from '../../../lib/server/images.ts';
+import { flashFrom } from '../../../lib/server/http.ts';
+
+const userId = Astro.locals.admin!.user.id;
+let uploadError: string | null = null;
+let draftAlt = '';
+
+if (Astro.request.method === 'POST') {
+  const retryAfter = uploadRateLimit(userId);
+  if (retryAfter !== null) {
+    uploadError = `Too many uploads in a short time. Try again in ${Math.ceil(retryAfter / 60)} minute(s).`;
+    Astro.response.status = 429;
+    Astro.response.headers.set('Retry-After', String(retryAfter));
+  } else {
+    const form = await Astro.request.formData();
+    draftAlt = String(form.get('alt') ?? '').slice(0, MEDIA.altMax + 50);
+    const file = form.get('image');
+    if (String(form.get('_action') ?? '') !== 'upload') {
+      uploadError = 'Unknown action.';
+    } else if (!(file instanceof File) || file.size === 0) {
+      uploadError = 'Choose an image file to upload.';
+    } else if (file.size > IMAGE_LIMITS.maxBytes) {
+      uploadError = REJECTION_MESSAGES.too_large;
+    } else {
+      try {
+        const result = await uploadMedia({
+          data: Buffer.from(await file.arrayBuffer()),
+          claimedType: file.type,
+          originalName: file.name,
+          altText: draftAlt,
+          userId,
+        });
+        if (result.ok) return Astro.redirect(`/admin/media/${result.item.id}?msg=uploaded`, 303);
+        uploadError = result.error;
+      } catch (err) {
+        console.error('[media] upload failed:', (err as Error).name); // never the bytes or form content
+        uploadError = 'The image could not be saved. Check there is free disk space and try again.';
+        Astro.response.status = 500;
+      }
+    }
+    if (Astro.response.status === 200) Astro.response.status = 422;
+  }
+}
+
+const sp = Astro.url.searchParams;
+const result = listMedia({ q: (sp.get('q') ?? '').slice(0, 100), page: Number(sp.get('page') ?? 1) || 1 });
+const href = (changes: Record<string, string | number | null>) => {
+  const u = new URLSearchParams(sp);
+  u.delete('msg');
+  for (const [k, v] of Object.entries(changes)) {
+    if (v === null || v === '') u.delete(k);
+    else u.set(k, String(v));
+  }
+  const s = u.toString();
+  return s ? `?${s}` : '/admin/media';
+};
+const kb = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { dateStyle: 'medium' });
+const maxMb = IMAGE_LIMITS.maxBytes / 1024 / 1024;
+const flash = uploadError ? { kind: 'error' as const, text: uploadError } : flashFrom(Astro.url);
+---
+
+<AdminLayout title="Media" crumbs={[{ label: 'Media' }]} flash={flash}>
+  <section class="admin-card md-upload" aria-labelledby="md-upload-title">
+    <h2 id="md-upload-title">Upload an image</h2>
+    <form method="post" enctype="multipart/form-data" class="md-upload__form" data-upload-form>
+      <Csrf />
+      <input type="hidden" name="_action" value="upload" />
+      <div class="admin-field">
+        <label for="md-image">Image file</label>
+        <input
+          id="md-image"
+          name="image"
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/avif"
+          required
+          aria-describedby="md-image-hint md-image-error"
+          aria-invalid={uploadError ? 'true' : undefined}
+          data-max-bytes={IMAGE_LIMITS.maxBytes}
+        />
+        <p class="admin-hint" id="md-image-hint">
+          JPEG, PNG, WebP or AVIF, up to {maxMb} MB and {IMAGE_LIMITS.maxSide.toLocaleString('en-IN')} px per side. Images are converted to
+          WebP, resized to at most {IMAGE_LIMITS.outputMaxSide.toLocaleString('en-IN')} px, and location/camera data is removed.
+        </p>
+        <p class="admin-error" id="md-image-error" data-file-error hidden></p>
+      </div>
+      <div class="admin-field">
+        <label for="md-alt">Alt text <span class="md-optional">(recommended)</span></label>
+        <input id="md-alt" name="alt" type="text" maxlength={MEDIA.altMax} value={draftAlt} aria-describedby="md-alt-hint" />
+        <p class="admin-hint" id="md-alt-hint">Describe what the image shows for people who can’t see it, e.g. “Technician cleaning a rooftop solar array”.</p>
+      </div>
+      <button type="submit" class="admin-btn admin-btn--primary" data-upload-button>Upload image</button>
+    </form>
+  </section>
+
+  <form method="get" class="admin-toolbar" role="search" aria-label="Search images">
+    <div class="admin-field">
+      <label for="q">Search</label>
+      <input id="q" name="q" type="search" value={result.q} placeholder="Alt text or file name" />
+    </div>
+    <button type="submit" class="admin-btn admin-btn--secondary">Search</button>
+    {result.q && <a href={href({ q: null, page: null })} class="admin-btn admin-btn--secondary">Clear</a>}
+  </form>
+
+  <p class="md-count" role="status">{result.total} {result.total === 1 ? 'image' : 'images'}{result.q ? ' match' : ''}</p>
+
+  {
+    result.total === 0 ? (
+      <div class="admin-card admin-empty">
+        <p>{result.q ? 'No images match.' : 'No images yet. Upload one above.'}</p>
+      </div>
+    ) : (
+      <ul class="md-grid" role="list">
+        {result.items.map((m) => {
+          const t = thumbSize(m);
+          const label = m.originalName || `Image ${m.uid.slice(0, 8)}`;
+          return (
+            <li class="md-item">
+              <img src={mediaUrl(m.uid, true)} width={t.width} height={t.height} alt={m.altText} loading="lazy" decoding="async" />
+              <div class="md-item__body">
+                <a href={`/admin/media/${m.id}`} class="md-item__link">
+                  {label}
+                </a>
+                <p class="md-item__meta">
+                  {m.width}×{m.height} · {kb(m.bytes)} · {fmt(m.createdAt)}
+                </p>
+                <p class="md-item__badges">
+                  {m.altText ? null : <span class="admin-badge admin-badge--new">No alt text</span>}
+                  {m.usageCount > 0 ? <span class="admin-badge admin-badge--on">In use ({m.usageCount})</span> : <span class="admin-badge admin-badge--off">Not used</span>}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    )
+  }
+
+  {
+    result.pages > 1 && (
+      <nav class="admin-pager" aria-label="Pagination">
+        <span>
+          Page {result.page} of {result.pages}
+        </span>
+        <span>
+          {result.page > 1 && <a href={href({ page: result.page - 1 })} class="admin-btn admin-btn--secondary">Previous</a>}
+          {result.page < result.pages && <a href={href({ page: result.page + 1 })} class="admin-btn admin-btn--secondary">Next</a>}
+        </span>
+      </nav>
+    )
+  }
+</AdminLayout>
+
+<script>
+  // Progressive enhancement: catch an over-size file before sending it, and show progress.
+  // The server enforces every rule regardless.
+  const form = document.querySelector<HTMLFormElement>('[data-upload-form]');
+  const input = form?.querySelector<HTMLInputElement>('input[type="file"]');
+  const error = form?.querySelector<HTMLElement>('[data-file-error]');
+  const button = form?.querySelector<HTMLButtonElement>('[data-upload-button]');
+  if (form && input && error && button) {
+    const max = Number(input.dataset.maxBytes);
+    const check = () => {
+      const file = input.files?.[0];
+      const tooBig = !!file && file.size > max;
+      error.hidden = !tooBig;
+      error.textContent = tooBig ? `This file is ${(file!.size / 1024 / 1024).toFixed(1)} MB. The limit is ${max / 1024 / 1024} MB.` : '';
+      input.setAttribute('aria-invalid', tooBig ? 'true' : 'false');
+      return !tooBig;
+    };
+    input.addEventListener('change', check);
+    form.addEventListener('submit', (e) => {
+      if (!check()) {
+        e.preventDefault();
+        input.focus();
+        return;
+      }
+      button.disabled = true;
+      button.textContent = 'Uploading…';
+      form.setAttribute('aria-busy', 'true');
+    });
+  }
+</script>
+
+<style>
+  .md-upload {
+    max-width: 720px;
+    margin-bottom: var(--space-4);
+  }
+
+  .md-upload__form {
+    display: grid;
+    gap: var(--space-2);
+    justify-items: start;
+    margin-top: var(--space-2);
+  }
+
+  .md-upload__form .admin-field {
+    width: 100%;
+  }
+
+  .md-optional {
+    font-weight: var(--fw-regular);
+    color: var(--text-secondary);
+  }
+
+  .md-count {
+    margin-block: var(--space-2);
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+  }
+
+  .md-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+    gap: var(--space-2);
+  }
+
+  .md-item {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--white);
+  }
+
+  .md-item img {
+    width: 100%;
+    height: 160px;
+    object-fit: contain;
+    background: var(--ice-50);
+  }
+
+  .md-item__body {
+    display: grid;
+    gap: 4px;
+    align-content: start;
+    padding: var(--space-1-5);
+  }
+
+  .md-item__link {
+    font-weight: var(--fw-semibold);
+    overflow-wrap: anywhere;
+  }
+
+  .md-item__meta {
+    font-size: var(--fs-xs);
+    color: var(--text-secondary);
+  }
+
+  .md-item__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+</style>

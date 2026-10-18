@@ -41,11 +41,41 @@ const SECURITY_HEADERS = {
 // send "X-Forwarded-For: 127.0.0.1" to impersonate a local address and reach /admin.
 const TRUST_PROXY = (process.env.TRUST_PROXY ?? '').toLowerCase() === 'true';
 
+// Request-body limits, enforced from Content-Length BEFORE any of the body is read or parsed.
+// The image upload endpoint allows one image (8 MB) plus form fields; keep in sync with
+// MEDIA.maxRequestBytes in src/lib/server/media.ts. Everything else is small form/JSON posts.
+const MAX_BODY_BYTES = 1024 * 1024;
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024 + 256 * 1024;
+const UPLOAD_PATHS = new Set(['/admin/media', '/admin/media/']);
+
+function bodyLimitError(req) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return null;
+  const length = req.headers['content-length'];
+  const chunked = req.headers['transfer-encoding'] !== undefined;
+  if (length === undefined) return chunked ? { status: 411, text: 'Content-Length required.' } : null;
+  const path = (req.url ?? '/').split('?')[0];
+  const limit = UPLOAD_PATHS.has(path) ? MAX_UPLOAD_BYTES : MAX_BODY_BYTES;
+  return Number(length) > limit ? { status: 413, text: 'Request too large.' } : null;
+}
+
 const server = http.createServer((req, res) => {
   if (!TRUST_PROXY) {
     for (const h of Object.keys(req.headers)) if (h.startsWith('x-forwarded-') || h === 'forwarded') delete req.headers[h];
   }
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
+  const tooBig = bodyLimitError(req);
+  if (tooBig) {
+    res.writeHead(tooBig.status, { 'Content-Type': 'text/plain; charset=utf-8', Connection: 'close' });
+    res.end(tooBig.text);
+    // Discard (never buffer) what the client is still sending, up to a cap, so it can read the
+    // response; beyond that just drop the connection.
+    let drained = 0;
+    req.on('data', (c) => {
+      drained += c.length;
+      if (drained > 32 * 1024 * 1024) req.destroy();
+    });
+    return;
+  }
   handler(req, res);
 });
 

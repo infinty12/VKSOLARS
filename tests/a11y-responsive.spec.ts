@@ -39,7 +39,7 @@ test.describe('responsive admin layout', () => {
   // the document width against the configured width, not against window.innerWidth.
   // Scroll containers inside the page (e.g. the admin nav) may scroll; the page itself must not.
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'widths are set explicitly');
-  const adminPages = ['/admin', '/admin/service-areas', '/admin/service-areas/new', '/admin/enquiries', '/admin/enquiries/settings', '/admin/backups'];
+  const adminPages = ['/admin', '/admin/service-areas', '/admin/service-areas/new', '/admin/enquiries', '/admin/enquiries/settings', '/admin/media', '/admin/backups'];
 
   for (const width of [375, 390]) {
     test(`signed-in admin pages do not overflow horizontally at ${width}px`, async ({ browser, baseURL }) => {

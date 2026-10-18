@@ -1,6 +1,6 @@
 /**
- * Safe image processing foundation (server-only). There is no upload UI or public media route
- * yet; this module is what any future upload handler must go through.
+ * Safe image processing (server-only). Every upload must go through this module; the media
+ * library (media.ts, Admin → Media) is its user, and /media/<uuid>.webp serves the results.
  *
  * Every upload is:
  *   1. size-checked BEFORE decoding (default 8 MB);
