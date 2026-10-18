@@ -52,7 +52,8 @@ try {
   exitCode = 1;
 } finally {
   // Wait for the server to exit: on Windows its open database file blocks deletion until then.
-  const exited = server.exitCode !== null ? Promise.resolve() : new Promise((r) => server.once('exit', r));
+  // A killed child sets signalCode, not exitCode, so check both.
+  const exited = server.exitCode !== null || server.signalCode !== null ? Promise.resolve() : new Promise((r) => server.once('exit', r));
   server.kill();
   await exited;
   rmSync(resolve('.snapshot-test-storage'), { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });

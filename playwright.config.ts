@@ -7,6 +7,8 @@ const PORT = 4397;
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
+  // Optional cap on parallel browsers for low-memory machines, e.g. PW_WORKERS=2 npm run verify.
+  workers: process.env.PW_WORKERS ? Number(process.env.PW_WORKERS) : undefined,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],

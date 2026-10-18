@@ -1,0 +1,36 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import LocationForm from '../../../components/admin/LocationForm.astro';
+import { createLocation, listRegions, locationInputFromForm, type LocationErrors, type LocationInput } from '../../../lib/server/areas.ts';
+
+const regions = listRegions();
+let values: Partial<LocationInput> = { status: 'unconfirmed', published: false, services: [] };
+let errors: LocationErrors = {};
+let duplicateOf: number | undefined;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  values = locationInputFromForm(form);
+  const result = createLocation(values, Astro.locals.admin!.user.id);
+  if (result.ok) return Astro.redirect(`/admin/service-areas/${result.id}?msg=created`, 303);
+  errors = result.errors;
+  duplicateOf = result.duplicateOf;
+  Astro.response.status = result.duplicateOf ? 409 : 422;
+}
+---
+
+<AdminLayout title="Add service location" crumbs={[{ label: 'Service Areas', href: '/admin/service-areas' }, { label: 'Add location' }]}>
+  <p class="intro">
+    Add a place only when you have confirmed VK Solar’s coverage there. New locations start as <strong>unpublished</strong> and
+    <strong>not yet confirmed</strong>.
+  </p>
+  <LocationForm regions={regions} values={values} errors={errors} duplicateOf={duplicateOf} submitLabel="Add location" />
+</AdminLayout>
+
+<style>
+  .intro {
+    max-width: 70ch;
+    margin-bottom: var(--space-3);
+    color: var(--text-secondary);
+  }
+</style>

@@ -30,6 +30,9 @@ function startServer(port, storage, extraEnv = {}) {
   return { child, ready };
 }
 
+/** Resolves when the child has exited. A killed child sets signalCode, not exitCode, so check both. */
+const exited = (c) => (c.exitCode !== null || c.signalCode !== null ? Promise.resolve() : new Promise((r) => c.once('exit', r)));
+
 const formBody = (o) => new URLSearchParams(o).toString();
 const cookieOf = (res, name) => {
   const raw = res.headers.getSetCookie().find((c) => c.startsWith(`${name}=`));
@@ -89,7 +92,7 @@ try {
   }
 
   // ---- Unauthenticated access
-  for (const p of ['/admin', '/admin/']) {
+  for (const p of ['/admin', '/admin/', '/admin/service-areas', '/admin/service-areas/new', '/admin/service-areas/1']) {
     const r = await get(p);
     check(`GET ${p} unauthenticated → 303 to /admin/login`, r.status === 303 && r.headers.get('location')?.startsWith('/admin/login'), `${r.status} ${r.headers.get('location')}`);
   }
@@ -187,6 +190,30 @@ try {
   const localB = await login(baseB, credsB.username, credsB.password);
   check('TRUST_PROXY=true + loopback client → login still works', localB.status === 303, String(localB.status));
 
+  // ---- Persistence across a server restart (before the lockout test, which would also persist)
+  const sp = cookieOf(await login(base, creds.username, creds.password), 'vk_admin_session');
+  const authHeaders = { ...FORM, Cookie: `vk_admin_session=${sp.value}` };
+  const newForm = await get('/admin/service-areas/new', { headers: { Cookie: `vk_admin_session=${sp.value}` } });
+  const csrfNew = tokenIn(await newForm.text());
+  const created = await get('/admin/service-areas/new', {
+    method: 'POST',
+    headers: authHeaders,
+    body: formBody({ _csrf: csrfNew, _action: 'save', regionCode: 'maharashtra', district: 'Pune', city: 'Persistville', status: 'available', published: 'on', note: 'Restart check' }),
+  });
+  const locPath = (created.headers.get('location') ?? '').split('?')[0];
+  check('create + publish a location through the admin form → 303', created.status === 303 && /^\/admin\/service-areas\/\d+$/.test(locPath), `${created.status} ${locPath}`);
+
+  const exitedA = exited(a.child);
+  a.child.kill();
+  await exitedA;
+  const a2 = startServer(A.port, A.storage, { KEEP_STORAGE: 'true' });
+  servers.push(a2.child);
+  await a2.ready;
+  const afterRestart = await get(locPath, { headers: { Cookie: `vk_admin_session=${sp.value}` } });
+  const afterHtml = await afterRestart.text();
+  check('after restart: session still valid and location still there', afterRestart.status === 200 && afterHtml.includes('Persistville') && afterHtml.includes('Restart check'), String(afterRestart.status));
+  check('after restart: location still published', afterHtml.includes('>Published<'));
+
   // ---- Login rate limiting (run last: it locks the test account)
   let last;
   for (let i = 0; i < 6; i++) last = await login(base, creds.username, 'wrong-wrong-wrong');
@@ -197,7 +224,7 @@ try {
   check('smoke test ran to completion', false, err.message);
 } finally {
   // Wait for the servers to exit: on Windows their open database files block deletion until then.
-  const exits = servers.map((c) => (c.exitCode !== null ? Promise.resolve() : new Promise((r) => c.once('exit', r))));
+  const exits = servers.map(exited);
   for (const c of servers) c.kill();
   await Promise.all(exits);
   for (const s of [A.storage, B.storage]) rmSync(s, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });

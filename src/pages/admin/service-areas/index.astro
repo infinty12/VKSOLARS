@@ -1,0 +1,208 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Csrf from '../../../components/admin/Csrf.astro';
+import {
+  COVERAGE_STATUSES,
+  STATUS_LABELS,
+  listLocations,
+  listRegions,
+  placeLabel,
+  setPublished,
+  type LocationFilter,
+} from '../../../lib/server/areas.ts';
+import { flashFrom } from '../../../lib/server/http.ts';
+import { services } from '../../../data/services.ts';
+
+const userId = Astro.locals.admin!.user.id;
+let actionError: string | null = null;
+
+// Quick publish/unpublish from the list.
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const id = Number(form.get('id'));
+  const action = String(form.get('_action') ?? '');
+  if (action === 'publish' || action === 'unpublish') {
+    const result = setPublished(id, action === 'publish', userId);
+    if (result.ok) {
+      const back = new URL(Astro.url);
+      back.searchParams.set('msg', `${action}ed`);
+      return Astro.redirect(`${back.pathname}${back.search}`, 303);
+    }
+    actionError = result.error;
+    Astro.response.status = 422;
+  }
+}
+
+const sp = Astro.url.searchParams;
+const filter: LocationFilter = {
+  q: sp.get('q') ?? '',
+  region: sp.get('region') ?? '',
+  status: sp.get('status') ?? '',
+  visibility: (['published', 'unpublished'].includes(sp.get('visibility') ?? '') ? sp.get('visibility') : '') as LocationFilter['visibility'],
+  page: Number(sp.get('page') ?? 1) || 1,
+};
+const result = listLocations(filter);
+const regions = listRegions();
+const serviceTitle = Object.fromEntries(services.map((s) => [s.slug, s.title]));
+const filtered = Boolean(filter.q || filter.region || filter.status || filter.visibility);
+const flash = actionError ? { kind: 'error' as const, text: actionError } : flashFrom(Astro.url);
+
+const pageHref = (p: number) => {
+  const u = new URLSearchParams(sp);
+  u.delete('msg');
+  u.set('page', String(p));
+  return `?${u.toString()}`;
+};
+---
+
+<AdminLayout title="Service Areas" crumbs={[{ label: 'Service Areas' }]} flash={flash}>
+  <div class="sa-head">
+    <p class="sa-intro">
+      Coverage across India is configured here. Only <strong>published</strong> locations with status “Coverage available”, “Limited
+      coverage” or “Planned” appear publicly, and only available/limited are presented as active service locations.
+    </p>
+    <a href="/admin/service-areas/new" class="admin-btn admin-btn--primary">Add location</a>
+  </div>
+
+  <form method="get" class="admin-toolbar" role="search" aria-label="Filter service locations">
+    <div class="admin-field">
+      <label for="q">Search</label>
+      <input id="q" name="q" type="search" value={filter.q} placeholder="District, city, state or note" />
+    </div>
+    <div class="admin-field">
+      <label for="f-region">State / UT</label>
+      <select id="f-region" name="region">
+        <option value="">All</option>
+        {regions.map((r) => <option value={r.code} selected={filter.region === r.code}>{r.name}</option>)}
+      </select>
+    </div>
+    <div class="admin-field">
+      <label for="f-status">Status</label>
+      <select id="f-status" name="status">
+        <option value="">All</option>
+        {COVERAGE_STATUSES.map((s) => <option value={s} selected={filter.status === s}>{STATUS_LABELS[s]}</option>)}
+      </select>
+    </div>
+    <div class="admin-field">
+      <label for="f-vis">Visibility</label>
+      <select id="f-vis" name="visibility">
+        <option value="">All</option>
+        <option value="published" selected={filter.visibility === 'published'}>Published</option>
+        <option value="unpublished" selected={filter.visibility === 'unpublished'}>Not published</option>
+      </select>
+    </div>
+    <button type="submit" class="admin-btn admin-btn--secondary">Apply</button>
+    {filtered && <a href="/admin/service-areas" class="admin-btn admin-btn--secondary">Clear</a>}
+  </form>
+
+  <p class="sa-count" role="status">{result.total} {result.total === 1 ? 'location' : 'locations'}{filtered ? ' match these filters' : ''}</p>
+
+  {
+    result.total === 0 ? (
+      <div class="admin-card admin-empty">
+        {filtered ? (
+          <p>No locations match these filters.</p>
+        ) : (
+          <p>
+            No service locations yet. Every state and union territory is treated as <strong>not yet confirmed</strong> until you add
+            and publish a location.
+          </p>
+        )}
+      </div>
+    ) : (
+      <div class="admin-table-wrap">
+        <table class="admin-table admin-table--stack">
+          <caption class="sr-only">Service locations</caption>
+          <thead>
+            <tr>
+              <th scope="col">Location</th>
+              <th scope="col">State / UT</th>
+              <th scope="col">Status</th>
+              <th scope="col">Services</th>
+              <th scope="col">Visibility</th>
+              <th scope="col"><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.items.map((l) => (
+              <tr>
+                <th scope="row">
+                  <a href={`/admin/service-areas/${l.id}`}>{placeLabel(l)}</a>
+                </th>
+                <td data-label="State / UT">{l.regionName}</td>
+                <td data-label="Status">
+                  <span class:list={['admin-badge', `admin-badge--${l.status}`]}>{STATUS_LABELS[l.status]}</span>
+                </td>
+                <td data-label="Services">{l.services.length ? l.services.map((s) => serviceTitle[s]).join(', ') : <span class="sa-muted">Not specified</span>}</td>
+                <td data-label="Visibility">
+                  {l.published ? <span class="admin-badge admin-badge--on">Published</span> : <span class="admin-badge admin-badge--draft">Not published</span>}
+                </td>
+                <td class="sa-actions">
+                  <form method="post" class="admin-inline-form">
+                    <Csrf />
+                    <input type="hidden" name="id" value={l.id} />
+                    <input type="hidden" name="_action" value={l.published ? 'unpublish' : 'publish'} />
+                    <button
+                      type="submit"
+                      class="admin-btn admin-btn--secondary"
+                      disabled={!l.published && l.status === 'unconfirmed'}
+                      title={!l.published && l.status === 'unconfirmed' ? 'Unconfirmed locations cannot be published' : undefined}
+                    >
+                      {l.published ? 'Unpublish' : 'Publish'}
+                      <span class="sr-only"> {placeLabel(l)}, {l.regionName}</span>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  {
+    result.pages > 1 && (
+      <nav class="admin-pager" aria-label="Pagination">
+        <span>
+          Page {result.page} of {result.pages}
+        </span>
+        <span>
+          {result.page > 1 && <a href={pageHref(result.page - 1)} class="admin-btn admin-btn--secondary">Previous</a>}
+          {result.page < result.pages && <a href={pageHref(result.page + 1)} class="admin-btn admin-btn--secondary">Next</a>}
+        </span>
+      </nav>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .sa-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: var(--space-3);
+  }
+
+  .sa-intro {
+    max-width: 70ch;
+    color: var(--text-secondary);
+  }
+
+  .sa-count {
+    margin-bottom: var(--space-1);
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+  }
+
+  .sa-muted {
+    color: var(--text-supporting);
+  }
+
+  .sa-actions {
+    text-align: right;
+    white-space: nowrap;
+  }
+</style>

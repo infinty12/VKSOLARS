@@ -1,0 +1,165 @@
+---
+import Csrf from './Csrf.astro';
+import { COVERAGE_STATUSES, STATUS_LABELS, LIMITS, type LocationErrors, type LocationInput, type Region } from '../../lib/server/areas.ts';
+import { services } from '../../data/services.ts';
+
+interface Props {
+  regions: Region[];
+  values: Partial<LocationInput>;
+  errors?: LocationErrors;
+  submitLabel: string;
+  duplicateOf?: number;
+}
+
+const { regions, values, errors = {}, submitLabel, duplicateOf } = Astro.props;
+const states = regions.filter((r) => r.type === 'state');
+const uts = regions.filter((r) => r.type === 'ut');
+const selected = new Set(values.services ?? []);
+const err = (k: keyof LocationErrors) => errors[k];
+const describedBy = (id: string, hint = true) => [hint ? `${id}-hint` : '', err(id as keyof LocationErrors) ? `${id}-error` : ''].filter(Boolean).join(' ') || undefined;
+const errorCount = Object.keys(errors).length;
+---
+
+<form method="post" class="loc-form admin-card" novalidate data-unsaved-warning>
+  <Csrf />
+  <input type="hidden" name="_action" value="save" />
+
+  {
+    errorCount > 0 && (
+      <div class="admin-flash admin-flash--error" role="alert" tabindex="-1" id="form-errors">
+        <p>
+          {err('form') ?? `Please correct the ${errorCount === 1 ? 'highlighted field' : `${errorCount} highlighted fields`}.`}
+          {duplicateOf && (
+            <>
+              {' '}
+              <a href={`/admin/service-areas/${duplicateOf}`}>Open the existing entry</a>.
+            </>
+          )}
+        </p>
+      </div>
+    )
+  }
+
+  <div class="loc-form__grid">
+    <div class="admin-field">
+      <label for="regionCode">State or union territory <span aria-hidden="true">*</span></label>
+      <select id="regionCode" name="regionCode" required aria-invalid={err('regionCode') ? 'true' : undefined} aria-describedby={describedBy('regionCode', false)}>
+        <option value="">Select…</option>
+        <optgroup label="States">
+          {states.map((r) => <option value={r.code} selected={values.regionCode === r.code}>{r.name}</option>)}
+        </optgroup>
+        <optgroup label="Union territories">
+          {uts.map((r) => <option value={r.code} selected={values.regionCode === r.code}>{r.name}</option>)}
+        </optgroup>
+      </select>
+      {err('regionCode') && <p class="admin-error" id="regionCode-error">{err('regionCode')}</p>}
+    </div>
+
+    <div class="admin-field">
+      <label for="status">Coverage status <span aria-hidden="true">*</span></label>
+      <select id="status" name="status" required aria-invalid={err('status') ? 'true' : undefined} aria-describedby={describedBy('status')}>
+        {COVERAGE_STATUSES.map((s) => <option value={s} selected={(values.status ?? 'unconfirmed') === s}>{STATUS_LABELS[s]}</option>)}
+      </select>
+      <p class="admin-hint" id="status-hint">Only “Coverage available” and “Limited coverage” are shown as active service locations.</p>
+      {err('status') && <p class="admin-error" id="status-error">{err('status')}</p>}
+    </div>
+
+    <div class="admin-field">
+      <label for="district">District <span class="loc-form__opt">(optional)</span></label>
+      <input id="district" name="district" type="text" maxlength={LIMITS.place} value={values.district ?? ''} aria-invalid={err('district') ? 'true' : undefined} aria-describedby={describedBy('district')} />
+      <p class="admin-hint" id="district-hint">Leave district and city empty for a state/UT-wide entry.</p>
+      {err('district') && <p class="admin-error" id="district-error">{err('district')}</p>}
+    </div>
+
+    <div class="admin-field">
+      <label for="city">City or town <span class="loc-form__opt">(optional)</span></label>
+      <input id="city" name="city" type="text" maxlength={LIMITS.place} value={values.city ?? ''} aria-invalid={err('city') ? 'true' : undefined} aria-describedby={describedBy('city')} />
+      <p class="admin-hint" id="city-hint">Enter only places you have confirmed yourself.</p>
+      {err('city') && <p class="admin-error" id="city-error">{err('city')}</p>}
+    </div>
+  </div>
+
+  <fieldset class="admin-field loc-form__services" aria-describedby="services-hint">
+    <legend>Services offered here <span class="loc-form__opt">(optional)</span></legend>
+    <p class="admin-hint" id="services-hint">Leave all unticked if the services available here are confirmed case by case.</p>
+    <div class="loc-form__checks">
+      {
+        services.map((s) => (
+          <label class="admin-check">
+            <input type="checkbox" name="services" value={s.slug} checked={selected.has(s.slug)} />
+            {s.title}
+          </label>
+        ))
+      }
+    </div>
+    {err('services') && <p class="admin-error">{err('services')}</p>}
+  </fieldset>
+
+  <div class="admin-field">
+    <label for="note">Public note <span class="loc-form__opt">(optional)</span></label>
+    <textarea id="note" name="note" maxlength={LIMITS.note} aria-invalid={err('note') ? 'true' : undefined} aria-describedby={describedBy('note')}>{values.note ?? ''}</textarea>
+    <p class="admin-hint" id="note-hint">Shown to visitors, e.g. “Ground-mount sites only”. Plain text, up to {LIMITS.note} characters. Don’t promise response times you haven’t confirmed.</p>
+    {err('note') && <p class="admin-error" id="note-error">{err('note')}</p>}
+  </div>
+
+  <div class="admin-field">
+    <label class="admin-check">
+      <input type="checkbox" name="published" checked={values.published} aria-describedby={describedBy('published')} />
+      Published — show on the public Service Areas page
+    </label>
+    <p class="admin-hint" id="published-hint">Unconfirmed locations cannot be published.</p>
+    {err('published') && <p class="admin-error" id="published-error">{err('published')}</p>}
+  </div>
+
+  <div class="loc-form__actions">
+    <button type="submit" class="admin-btn admin-btn--primary">{submitLabel}</button>
+    <a href="/admin/service-areas" class="admin-btn admin-btn--secondary">Cancel</a>
+  </div>
+</form>
+
+<script>
+  document.getElementById('form-errors')?.focus();
+</script>
+
+<style>
+  .loc-form {
+    display: grid;
+    gap: var(--space-3);
+    max-width: 880px;
+  }
+
+  .loc-form__grid {
+    display: grid;
+    gap: var(--space-3) var(--space-2);
+  }
+
+  @media (min-width: 768px) {
+    .loc-form__grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .loc-form__opt {
+    font-weight: var(--fw-regular);
+    color: var(--text-supporting);
+  }
+
+  .loc-form__services {
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+
+  .loc-form__checks {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+    gap: 4px var(--space-2);
+    margin-top: var(--space-1);
+  }
+
+  .loc-form__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1-5);
+  }
+</style>

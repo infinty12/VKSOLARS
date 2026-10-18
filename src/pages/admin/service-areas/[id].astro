@@ -1,0 +1,136 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import LocationForm from '../../../components/admin/LocationForm.astro';
+import Csrf from '../../../components/admin/Csrf.astro';
+import {
+  deleteLocation,
+  getLocation,
+  listRegions,
+  locationInputFromForm,
+  placeLabel,
+  setPublished,
+  STATUS_LABELS,
+  updateLocation,
+  type LocationErrors,
+  type LocationInput,
+} from '../../../lib/server/areas.ts';
+import { flashFrom } from '../../../lib/server/http.ts';
+
+const id = Number(Astro.params.id);
+const userId = Astro.locals.admin!.user.id;
+let location = getLocation(id);
+if (!location) return Astro.redirect('/admin/service-areas?msg=notfound', 303);
+
+let errors: LocationErrors = {};
+let duplicateOf: number | undefined;
+let actionError: string | null = null;
+let values: Partial<LocationInput> = {
+  regionCode: location.regionCode,
+  district: location.district,
+  city: location.city,
+  status: location.status,
+  services: location.services,
+  note: location.note,
+  published: location.published,
+};
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('_action') ?? '');
+  if (action === 'save') {
+    values = locationInputFromForm(form);
+    const result = updateLocation(id, values, userId);
+    if (result.ok) return Astro.redirect(`/admin/service-areas/${id}?msg=saved`, 303);
+    errors = result.errors;
+    duplicateOf = result.duplicateOf;
+    Astro.response.status = result.duplicateOf ? 409 : 422;
+  } else if (action === 'publish' || action === 'unpublish') {
+    const result = setPublished(id, action === 'publish', userId);
+    if (result.ok) return Astro.redirect(`/admin/service-areas/${id}?msg=${action}ed`, 303);
+    actionError = result.error;
+    Astro.response.status = 422;
+  } else if (action === 'delete') {
+    deleteLocation(id, userId);
+    return Astro.redirect('/admin/service-areas?msg=deleted', 303);
+  } else {
+    actionError = 'Unknown action.';
+    Astro.response.status = 400;
+  }
+  location = getLocation(id)!;
+}
+
+const flash = actionError ? { kind: 'error' as const, text: actionError } : flashFrom(Astro.url);
+const label = placeLabel(location);
+const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+---
+
+<AdminLayout title={`${label} — ${location.regionName}`} crumbs={[{ label: 'Service Areas', href: '/admin/service-areas' }, { label: 'Edit location' }]} flash={flash}>
+  <div class="loc-meta admin-card">
+    <p>
+      <span class:list={['admin-badge', `admin-badge--${location.status}`]}>{STATUS_LABELS[location.status]}</span>
+      {
+        location.published ? (
+          <span class="admin-badge admin-badge--on">Published</span>
+        ) : (
+          <span class="admin-badge admin-badge--draft">Not published</span>
+        )
+      }
+    </p>
+    <p class="loc-meta__dates">Created {fmt(location.createdAt)} · Last updated {fmt(location.updatedAt)}</p>
+    <div class="loc-meta__actions">
+      {
+        location.published ? (
+          <form method="post" class="admin-inline-form">
+            <Csrf />
+            <input type="hidden" name="_action" value="unpublish" />
+            <button type="submit" class="admin-btn admin-btn--secondary">Unpublish</button>
+          </form>
+        ) : (
+          <form method="post" class="admin-inline-form">
+            <Csrf />
+            <input type="hidden" name="_action" value="publish" />
+            <button type="submit" class="admin-btn admin-btn--secondary" disabled={location.status === 'unconfirmed'} aria-describedby={location.status === 'unconfirmed' ? 'publish-why' : undefined}>
+              Publish
+            </button>
+          </form>
+        )
+      }
+      <form method="post" class="admin-inline-form" data-confirm={`Delete “${label}, ${location.regionName}”? This cannot be undone.`}>
+        <Csrf />
+        <input type="hidden" name="_action" value="delete" />
+        <button type="submit" class="admin-btn admin-btn--danger">Delete</button>
+      </form>
+    </div>
+    {location.status === 'unconfirmed' && !location.published && (
+      <p class="admin-hint" id="publish-why">Change the status from “Not yet confirmed” before publishing.</p>
+    )}
+  </div>
+
+  <LocationForm regions={listRegions()} values={values} errors={errors} duplicateOf={duplicateOf} submitLabel="Save changes" />
+</AdminLayout>
+
+<style>
+  .loc-meta {
+    display: grid;
+    gap: var(--space-1-5);
+    max-width: 880px;
+    margin-bottom: var(--space-3);
+  }
+
+  .loc-meta p:first-child {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .loc-meta__dates {
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+  }
+
+  .loc-meta__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+</style>
