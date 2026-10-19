@@ -1,0 +1,166 @@
+---
+// Customer registration (Firebase Authentication). Off unless the portal is enabled.
+import '../styles/portal.css';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import {
+  portalStatus,
+  readCustomer,
+  validateCredentials,
+  validateProfile,
+  issueFormCsrf,
+  checkFormCsrf,
+  startSession,
+  createProfile,
+  type Errors,
+} from '../lib/server/customers.ts';
+import { signUpWithPassword, IDENTITY_MESSAGES } from '../lib/server/firebase/identity.ts';
+import { firebaseAuth } from '../lib/server/firebase/admin.ts';
+import { hit } from '../lib/server/ratelimit.ts';
+import { clientIp } from '../lib/server/http.ts';
+import { REGIONS } from '../lib/server/regions.ts';
+
+Astro.response.headers.set('Cache-Control', 'no-store');
+const portal = portalStatus();
+if (portal.open && (await readCustomer(Astro.cookies))) return Astro.redirect('/dashboard', 303);
+
+let errors: Errors = {};
+let formError: string | null = null;
+let consentGiven = false;
+const values = { email: '', name: '', phone: '', city: '', region: '' };
+
+if (portal.open && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  for (const k of Object.keys(values) as (keyof typeof values)[]) values[k] = String(form.get(k) ?? '').slice(0, 260);
+  const ip = clientIp(() => Astro.clientAddress);
+  if (!checkFormCsrf(Astro.cookies, form.get('_csrf'))) {
+    formError = 'Your session expired. Please try again.';
+  } else if (hit(`portal-register:${ip}`, 5, 60 * 60 * 1000) !== null) {
+    formError = 'Too many registrations from this connection. Please try again later.';
+    Astro.response.status = 429;
+  } else {
+    const creds = { email: values.email, password: String(form.get('password') ?? ''), confirm: String(form.get('confirm') ?? '') };
+    const profile = validateProfile(values);
+    errors = { ...validateCredentials(creds, 'register'), ...(profile.ok ? {} : profile.errors) };
+    consentGiven = form.get('consent') === 'on';
+    if (!consentGiven) errors.consent = 'Please confirm you have read the Privacy Notice and agree, to create an account.';
+    if (Object.keys(errors).length === 0 && profile.ok) {
+      const email = values.email.trim().toLowerCase();
+      const result = await signUpWithPassword(email, creds.password);
+      if (result.ok) {
+        try {
+          await createProfile(result.uid, email, profile.value);
+          await startSession(Astro.cookies, Astro.url, result.idToken);
+          Astro.cookies.delete('vk_portal_csrf', { path: '/' });
+          return Astro.redirect('/dashboard?welcome=1', 303);
+        } catch (err) {
+          console.error('[portal] registration could not be completed:', (err as Error).name);
+          // Don't leave a half-created account behind (it would have no profile and could not sign in).
+          await firebaseAuth()
+            .then((a) => a.deleteUser(result.uid))
+            .catch(() => undefined);
+          formError = IDENTITY_MESSAGES.unavailable;
+        }
+      } else {
+        formError = IDENTITY_MESSAGES[result.error];
+        if (result.error === 'email_exists') errors.email = formError;
+      }
+    } else {
+      formError = 'Please correct the highlighted fields.';
+    }
+    Astro.response.status = Astro.response.status === 429 ? 429 : 422;
+  }
+}
+
+const csrf = portal.open ? issueFormCsrf(Astro.cookies, Astro.url) : '';
+const states = REGIONS.filter((r) => r.type === 'state');
+const uts = REGIONS.filter((r) => r.type === 'ut');
+const invalid = (k: string) => (errors[k] ? 'true' : undefined);
+const describedBy = (k: string) => (errors[k] ? `e-${k}` : undefined);
+---
+
+<SiteLayout title="Create an account" description="Create a VK Solar customer account to request inspections and services and track their status." noindex>
+  <section class="portal">
+    <div class="container portal__narrow">
+      <div class="portal-card">
+        <h1>Create your account</h1>
+        <p class="portal-lead">Request inspections and services and follow their progress in one place.</p>
+        {
+          !portal.open ? (
+            <p class="portal-alert portal-alert--info" role="status">
+              Customer accounts are not available yet. Please use the <a href="/contact">contact form</a>.
+            </p>
+          ) : (
+            <>
+              {formError && (
+                <p class="portal-alert portal-alert--error" role="alert">
+                  {formError}
+                </p>
+              )}
+              <form method="post" class="portal-form" novalidate>
+                <input type="hidden" name="_csrf" value={csrf} />
+                <div class="portal-field">
+                  <label for="name">Full name</label>
+                  <input id="name" name="name" autocomplete="name" required maxlength="80" value={values.name} aria-invalid={invalid('name')} aria-describedby={describedBy('name')} />
+                  {errors.name && <p class="portal-error" id="e-name">{errors.name}</p>}
+                </div>
+                <div class="portal-field">
+                  <label for="email">Email</label>
+                  <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" value={values.email} aria-invalid={invalid('email')} aria-describedby={describedBy('email')} />
+                  {errors.email && <p class="portal-error" id="e-email">{errors.email}</p>}
+                </div>
+                <div class="portal-field">
+                  <label for="phone">Phone number</label>
+                  <input id="phone" name="phone" type="tel" autocomplete="tel" required maxlength="20" value={values.phone} aria-invalid={invalid('phone')} aria-describedby={describedBy('phone')} />
+                  {errors.phone && <p class="portal-error" id="e-phone">{errors.phone}</p>}
+                </div>
+                <div class="portal-grid">
+                  <div class="portal-field">
+                    <label for="city">City or town <span class="portal-hint">(optional)</span></label>
+                    <input id="city" name="city" autocomplete="address-level2" maxlength="80" value={values.city} aria-invalid={invalid('city')} aria-describedby={describedBy('city')} />
+                    {errors.city && <p class="portal-error" id="e-city">{errors.city}</p>}
+                  </div>
+                  <div class="portal-field">
+                    <label for="region">State or UT <span class="portal-hint">(optional)</span></label>
+                    <select id="region" name="region" aria-invalid={invalid('region')} aria-describedby={describedBy('region')}>
+                      <option value="">Select…</option>
+                      <optgroup label="States">{states.map((r) => <option value={r.code} selected={values.region === r.code}>{r.name}</option>)}</optgroup>
+                      <optgroup label="Union territories">{uts.map((r) => <option value={r.code} selected={values.region === r.code}>{r.name}</option>)}</optgroup>
+                    </select>
+                    {errors.region && <p class="portal-error" id="e-region">{errors.region}</p>}
+                  </div>
+                </div>
+                <div class="portal-field">
+                  <label for="password">Password</label>
+                  <input id="password" name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="128" aria-invalid={invalid('password')} aria-describedby={errors.password ? 'e-password' : 'h-password'} />
+                  <p class="portal-hint" id="h-password">At least 8 characters.</p>
+                  {errors.password && <p class="portal-error" id="e-password">{errors.password}</p>}
+                </div>
+                <div class="portal-field">
+                  <label for="confirm">Confirm password</label>
+                  <input id="confirm" name="confirm" type="password" autocomplete="new-password" required maxlength="128" aria-invalid={invalid('confirm')} aria-describedby={describedBy('confirm')} />
+                  {errors.confirm && <p class="portal-error" id="e-confirm">{errors.confirm}</p>}
+                </div>
+                <div class="portal-field">
+                  <label class="portal-check" for="consent">
+                    <input id="consent" name="consent" type="checkbox" required checked={consentGiven} aria-invalid={invalid('consent')} aria-describedby={describedBy('consent')} />
+                    <span>
+                      I have read the <a href="/privacy" target="_blank" rel="noopener">Privacy Notice<span class="sr-only"> (opens in a new tab)</span></a> and
+                      agree to VK Solar using my name, email address, phone number and location to create my account, manage my service requests and
+                      contact me about them.
+                    </span>
+                  </label>
+                  {errors.consent && <p class="portal-error" id="e-consent">{errors.consent}</p>}
+                </div>
+                <button type="submit" class="portal-btn">Create account</button>
+                <p class="portal-hint">Your password is handled securely by Google Firebase Authentication. VK Solar never sees it.</p>
+              </form>
+              <p class="portal-switch">
+                Already registered? <a href="/login">Sign in</a>
+              </p>
+            </>
+          )
+        }
+      </div>
+    </div>
+  </section>
+</SiteLayout>

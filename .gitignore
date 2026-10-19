@@ -30,6 +30,18 @@ backups/
 logs/
 *.log
 
+# Firebase: Admin credentials must never be in the project (keep them OUTSIDE this folder);
+# these patterns are a safety net. Also CLI caches and logs.
+*service-account*.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
+*credentials*.json
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+
 # local Claude Code settings (machine-specific permissions)
 .claude/settings.local.json
 

@@ -29,7 +29,8 @@
     "verify": "npm run check && npm run lint && npm run contrast && npm run tokens && npm run test:unit && npm run build && npm run snapshot && npm run links && npm run validate:html && npm run seo && npm run smoke:admin && npm run test",
     "backup": "node --env-file-if-exists=.env scripts/backup.mjs",
     "backup:list": "node --env-file-if-exists=.env scripts/backup-list.mjs",
-    "restore": "node --env-file-if-exists=.env scripts/restore.mjs"
+    "restore": "node --env-file-if-exists=.env scripts/restore.mjs",
+    "firebase:check": "node --env-file-if-exists=.env scripts/firebase-check.mjs"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.8",
@@ -38,6 +39,7 @@
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fontsource/poppins": "^5.3.0",
     "astro": "^7.4.0",
+    "firebase-admin": "^14.5.0",
     "nodemailer": "^10.1.2",
     "sharp": "^0.35.5"
   },
@@ -48,6 +50,7 @@
     "@types/nodemailer": "^8.0.2",
     "eslint": "^10.13.0",
     "eslint-plugin-astro": "^3.2.1",
+    "firebase-tools": "^15.34.0",
     "html-validate": "^11.16.2",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.2"

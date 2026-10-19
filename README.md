@@ -222,6 +222,26 @@ On top of that:
   deletions are recorded by id — never image bytes, alt text or file names.
 - Images are included in backups (`storage/uploads` plus the `media` table).
 
+## Firebase (foundation only, off by default)
+
+The website still runs entirely on SQLite and local uploads. Firebase is being introduced in stages; nothing uses it yet.
+
+- **Off unless `FIREBASE_ENABLED=true`.** Settings are in `.env` (see `.env.example`); check them with
+  `npm run firebase:check` (validates only, no network) or `npm run firebase:check -- --connect` (read-only calls to the
+  project: one non-existent document read and an Auth user-count check; nothing is written).
+- **Server-only.** `src/lib/server/firebase/` uses the Admin SDK, loaded only when Firebase is configured. Browsers never
+  talk to Firestore or Storage, so `firestore.rules` and `storage.rules` deny every client request. The Admin SDK
+  bypasses those rules, so the server keeps doing its own sign-in, role, CSRF and validation checks.
+- **Credentials:** the web-app identifiers (project id, web API key, auth domain, bucket) go in `.env`. Admin
+  credentials never go in the project: either a service-account JSON file kept **outside this folder**
+  (`FIREBASE_SERVICE_ACCOUNT_FILE=<absolute path>`), or Application Default Credentials on Google Cloud hosting. The
+  check refuses a credentials file inside the project and Admin credentials in `PUBLIC_` variables.
+- **Dev vs prod data in one project:** every collection and storage path is prefixed with `FIREBASE_DATA_ENV`
+  (`dev_…` / `dev/…` by default; `prod` must be chosen explicitly). Firebase Authentication users are shared by the
+  whole project, so test accounts must be clearly named and removed after testing.
+- `firebase.json` / `.firebaserc` configure the Firebase CLI (`npx firebase …`, installed as a dev dependency) for
+  project `vksolars-15e9f`. **Nothing is deployed automatically**; rules are deployed only with explicit approval.
+
 ## Database, migrations and backups
 
 - File: `storage\vk-solar.db` (SQLite, WAL mode). Migrations live in `src/lib/server/migrations.ts` and are applied in

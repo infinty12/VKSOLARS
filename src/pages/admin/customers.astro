@@ -1,0 +1,82 @@
+---
+// Registered customers (Firebase). Admin-only: the middleware requires the admin sign-in,
+// local access and sends no-store/noindex. Customers never see this.
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { adminListCustomers, regionName } from '../../lib/server/customers.ts';
+import { getFirebaseConfig } from '../../lib/server/firebase/config.ts';
+
+const ready = getFirebaseConfig().status === 'ready';
+const after = (Astro.url.searchParams.get('after') ?? '').slice(0, 40);
+let list: Awaited<ReturnType<typeof adminListCustomers>> = [];
+let loadError = false;
+if (ready) {
+  try {
+    list = await adminListCustomers({ after: after || undefined });
+  } catch (err) {
+    console.error('[admin] customers could not be loaded:', (err as Error).name);
+    loadError = true;
+  }
+}
+const fmt = (iso: string) => (iso ? new Date(iso).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '');
+---
+
+<AdminLayout title="Customers" crumbs={[{ label: 'Customers' }]}>
+  {
+    !ready ? (
+      <div class="admin-card admin-empty">
+        <p>Firebase is not configured yet, so there are no customer accounts. See README → Firebase.</p>
+      </div>
+    ) : loadError ? (
+      <div class="admin-card admin-empty">
+        <p>Customers could not be loaded from Firebase. Check the configuration with npm run firebase:check.</p>
+      </div>
+    ) : list.length === 0 ? (
+      <div class="admin-card admin-empty">
+        <p>No registered customers{after ? ' on this page' : ' yet'}.</p>
+      </div>
+    ) : (
+      <div class="admin-table-wrap">
+        <table class="admin-table admin-table--stack">
+          <caption class="sr-only">Registered customers, newest first</caption>
+          <thead>
+            <tr>
+              <th scope="col">Customer</th>
+              <th scope="col">Email</th>
+              <th scope="col">Phone</th>
+              <th scope="col">Location</th>
+              <th scope="col">Registered</th>
+              <th scope="col">Requests</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((c) => (
+              <tr>
+                <th scope="row">
+                  {c.name || '—'}
+                  {c.disabled && <span class="admin-badge admin-badge--off">Disabled</span>}
+                </th>
+                <td data-label="Email">{c.email}</td>
+                <td data-label="Phone">{c.phone}</td>
+                <td data-label="Location">{[c.city, regionName(c.region)].filter(Boolean).join(', ') || '—'}</td>
+                <td data-label="Registered">{fmt(c.createdAt)}</td>
+                <td data-label="Requests">
+                  {c.requestCount > 0 ? <a href={`/admin/requests?customer=${encodeURIComponent(c.uid)}`}>{c.requestCount}</a> : 0}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+  {
+    list.length === 50 && (
+      <nav class="admin-pager" aria-label="Pagination">
+        <span />
+        <a href={`?after=${encodeURIComponent(list[list.length - 1].createdAt)}`} class="admin-btn admin-btn--secondary">
+          Older
+        </a>
+      </nav>
+    )
+  }
+</AdminLayout>

@@ -1,0 +1,101 @@
+---
+// Customer sign-in (Firebase Authentication). Off unless the portal is enabled.
+import '../styles/portal.css';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { portalStatus, readCustomer, validateCredentials, issueFormCsrf, checkFormCsrf, startSession, getProfile, type Errors } from '../lib/server/customers.ts';
+import { signInWithPassword, IDENTITY_MESSAGES } from '../lib/server/firebase/identity.ts';
+import { hit } from '../lib/server/ratelimit.ts';
+import { clientIp } from '../lib/server/http.ts';
+
+Astro.response.headers.set('Cache-Control', 'no-store');
+const portal = portalStatus();
+if (portal.open && (await readCustomer(Astro.cookies))) return Astro.redirect('/dashboard', 303);
+
+let errors: Errors = {};
+let formError: string | null = null;
+let email = '';
+const signedOut = Astro.url.searchParams.get('signedout') === '1';
+
+if (portal.open && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  email = String(form.get('email') ?? '').trim().toLowerCase().slice(0, 254);
+  const password = String(form.get('password') ?? '').slice(0, 128);
+  const ip = clientIp(() => Astro.clientAddress);
+  if (!checkFormCsrf(Astro.cookies, form.get('_csrf'))) {
+    formError = 'Your session expired. Please try again.';
+  } else if (hit(`portal-login-ip:${ip}`, 20, 15 * 60 * 1000) !== null || hit(`portal-login-email:${email}`, 8, 15 * 60 * 1000) !== null) {
+    formError = IDENTITY_MESSAGES.too_many_attempts;
+    Astro.response.status = 429;
+  } else {
+    errors = validateCredentials({ email, password }, 'login');
+    if (Object.keys(errors).length === 0) {
+      const result = await signInWithPassword(email, password);
+      if (result.ok) {
+        // Only customer accounts with a profile may use the portal.
+        const profile = await getProfile(result.uid).catch(() => null);
+        if (profile) {
+          await startSession(Astro.cookies, Astro.url, result.idToken);
+          Astro.cookies.delete('vk_portal_csrf', { path: '/' });
+          return Astro.redirect('/dashboard', 303);
+        }
+        formError = IDENTITY_MESSAGES.invalid_credentials;
+      } else {
+        formError = IDENTITY_MESSAGES[result.error];
+      }
+    } else {
+      formError = 'Please correct the highlighted fields.';
+    }
+    if (Astro.response.status !== 429) Astro.response.status = 401;
+  }
+}
+
+const csrf = portal.open ? issueFormCsrf(Astro.cookies, Astro.url) : '';
+---
+
+<SiteLayout title="Sign in" description="Sign in to your VK Solar customer account." noindex>
+  <section class="portal">
+    <div class="container portal__narrow">
+      <div class="portal-card">
+        <h1>Sign in</h1>
+        <p class="portal-lead">Track your inspection and service requests.</p>
+        {
+          !portal.open ? (
+            <p class="portal-alert portal-alert--info" role="status">
+              Customer accounts are not available yet. Please use the <a href="/contact">contact form</a>.
+            </p>
+          ) : (
+            <>
+              {signedOut && !formError && (
+                <p class="portal-alert portal-alert--success" role="status">
+                  You have been signed out.
+                </p>
+              )}
+              {formError && (
+                <p class="portal-alert portal-alert--error" role="alert">
+                  {formError}
+                </p>
+              )}
+              <form method="post" class="portal-form" novalidate>
+                <input type="hidden" name="_csrf" value={csrf} />
+                <div class="portal-field">
+                  <label for="email">Email</label>
+                  <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" value={email} aria-invalid={errors.email ? 'true' : undefined} aria-describedby={errors.email ? 'e-email' : undefined} />
+                  {errors.email && <p class="portal-error" id="e-email">{errors.email}</p>}
+                </div>
+                <div class="portal-field">
+                  <label for="password">Password</label>
+                  <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="128" aria-invalid={errors.password ? 'true' : undefined} aria-describedby={errors.password ? 'e-password' : undefined} />
+                  {errors.password && <p class="portal-error" id="e-password">{errors.password}</p>}
+                </div>
+                <button type="submit" class="portal-btn">Sign in</button>
+              </form>
+              <p class="portal-switch">
+                New here? <a href="/register">Create an account</a>
+              </p>
+            </>
+          )
+        }
+      </div>
+    </div>
+  </section>
+</SiteLayout>

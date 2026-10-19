@@ -14,6 +14,7 @@ export const CATEGORIES = {
   signin: { label: 'Sign-in', match: (a: string) => a.startsWith('login.') || a === 'logout' },
   areas: { label: 'Service areas', match: (a: string) => a.startsWith('location.') },
   enquiries: { label: 'Enquiries', match: (a: string) => a.startsWith('enquiry.') || a.startsWith('settings.enquiries') },
+  requests: { label: 'Customer requests', match: (a: string) => a.startsWith('request.') },
   media: { label: 'Media', match: (a: string) => a.startsWith('media.') },
   content: { label: 'Content', match: (a: string) => a.startsWith('content.') },
   backups: { label: 'Backups', match: (a: string) => a.startsWith('backup.') },
@@ -27,6 +28,7 @@ const CATEGORY_SQL: Record<Category, string> = {
   signin: "(action LIKE 'login.%' OR action = 'logout')",
   areas: "action LIKE 'location.%'",
   enquiries: "(action LIKE 'enquiry.%' OR action LIKE 'settings.enquiries%')",
+  requests: "action LIKE 'request.%'",
   media: "action LIKE 'media.%'",
   content: "action LIKE 'content.%'",
   backups: "action LIKE 'backup.%'",
@@ -50,6 +52,8 @@ export const ACTION_LABELS: Record<string, string> = {
   'enquiry.retention_purge': 'Old enquiries removed (retention clean-up)',
   'settings.enquiries_accept': 'Enquiry form switched on/off',
   'settings.enquiries_retention': 'Enquiry retention period changed',
+  'request.status': 'Customer request status changed',
+  'request.note': 'Customer request note added',
   'media.upload': 'Image uploaded',
   'media.upload_rejected': 'Image upload refused',
   'media.alt': 'Image alt text changed',
@@ -158,7 +162,8 @@ function resolveLinks(rows: { targetType: string | null; targetId: string | null
   return links;
 }
 
-function staticLink(targetType: string | null): string | null {
+function staticLink(targetType: string | null, targetId: string | null = null): string | null {
+  if (targetType === 'customer_request' && /^[A-Za-z0-9]{10,40}$/.test(targetId ?? '')) return `/admin/requests/${targetId}`;
   if (targetType === 'content') return '/admin/site-content';
   if (targetType === 'backup') return '/admin/backups';
   return null;
@@ -209,7 +214,7 @@ export function listActivity(filter: ActivityFilter = {}) {
     targetType: r.targetType === 'admin' ? null : r.targetType,
     targetId: r.targetType === 'admin' ? null : r.targetId,
     details: safeDetails(r.detail),
-    link: links.get(`${r.targetType}:${r.targetId}`) ?? staticLink(r.targetType),
+    link: links.get(`${r.targetType}:${r.targetId}`) ?? staticLink(r.targetType, r.targetId),
   }));
   return { rows, total, page, pages, from: from ? filter.from! : null, to: dayStartIso(filter.to) ? filter.to! : null };
 }

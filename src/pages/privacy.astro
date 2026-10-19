@@ -1,0 +1,171 @@
+---
+// Privacy Notice (DPDP Act, 2023). DRAFT: items in [square brackets] are company facts that VK
+// Solar must confirm; they are shown as-is rather than guessed. Have it reviewed before launch.
+import SiteLayout from '../layouts/SiteLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import { site, businessOf } from '../config/site';
+
+const business = businessOf(Astro.locals);
+const contactEmail = business.contact.email ?? '[privacy contact email]';
+const contactPhone = business.contact.phoneDisplay ?? business.contact.phone ?? '[phone number]';
+const address = business.contact.address ?? '[registered office address]';
+---
+
+<SiteLayout title="Privacy Notice" description={`How ${site.shortName} collects, uses and protects your personal data, and the rights you have under India's Digital Personal Data Protection Act, 2023.`}>
+  <PageHero eyebrow="Privacy" title="Privacy Notice">
+    <p>How we collect, use and protect your personal data. Last updated: [date].</p>
+  </PageHero>
+
+  <section class="section">
+    <div class="container privacy">
+      <p>
+        This notice explains how <strong>[full registered legal name of VK Solar]</strong> (“{site.shortName}”, “we”, “us”) collects and uses your
+        personal data when you use this website, including our contact form and customer account. We process personal data in line with the Digital
+        Personal Data Protection Act, 2023.
+      </p>
+
+      <h2>1. Who is responsible for your data</h2>
+      <p>{site.shortName} is the Data Fiduciary for personal data collected through this website.</p>
+      <ul>
+        <li>Registered address: <span class="privacy__lines">{address}</span></li>
+        <li>Privacy questions and grievances: [name or role of the responsible person], {contactEmail}, {contactPhone}</li>
+      </ul>
+
+      <h2>2. What personal data we collect</h2>
+      <h3>When you send an enquiry through the contact form</h3>
+      <ul>
+        <li>Your name and phone number, and your email address if you give it.</li>
+        <li>The service you are interested in, your state or union territory, and your site location.</li>
+        <li>Any message you write, and a record that you agreed to be contacted and when.</li>
+      </ul>
+      <h3>When you create a customer account</h3>
+      <ul>
+        <li>Your name, email address and phone number, and optionally your city or town and state.</li>
+        <li>A record that you accepted this notice, and when.</li>
+        <li>Your password, which is handled by our authentication provider (Google Firebase Authentication). We never see or store your password.</li>
+      </ul>
+      <h3>When you request a service through your account</h3>
+      <ul>
+        <li>The service requested, site location, state, system size (if given) and any details you add.</li>
+        <li>The status of each request and when it changed.</li>
+        <li>Internal notes our staff add to manage your request, used only internally.</li>
+      </ul>
+      <h3>Technical data</h3>
+      <ul>
+        <li>
+          Cookies: we use only cookies that are strictly necessary for the website to work — a sign-in cookie that keeps you logged in (up to 5 days)
+          and short-lived security cookies that protect our forms against misuse. We do not use advertising, analytics or tracking cookies.
+        </li>
+        <li>
+          Your internet (IP) address is used temporarily to prevent abuse, such as too many sign-in attempts or form submissions. It is not stored with
+          your enquiry or account.
+        </li>
+      </ul>
+      <p>We do not ask for, and ask you not to send, sensitive information such as financial details, identity numbers or health information.</p>
+
+      <h2>3. Why we use your data</h2>
+      <ol>
+        <li>To respond to your enquiry and contact you about it by phone or email.</li>
+        <li>To create and manage your customer account.</li>
+        <li>To receive, schedule, carry out and update you on the services you request.</li>
+        <li>To keep the website secure and prevent misuse.</li>
+        <li>To meet our legal obligations.</li>
+      </ol>
+      <p>
+        We do not sell your personal data or use it for advertising. We process it on the basis of your consent, which you give when you submit the
+        contact form or create an account. You can withdraw it at any time (see section 7).
+      </p>
+
+      <h2>4. Who we share it with</h2>
+      <p>We share personal data only with service providers who help us run the website, and only as needed:</p>
+      <ul>
+        <li>Google (Firebase Authentication and Cloud Firestore), to manage customer accounts and store account and request data, in [Google Cloud region].</li>
+        <li>Our email provider ([provider]), to send internal notifications about new enquiries, if enabled.</li>
+        <li>Our hosting provider ([provider]), which runs the website.</li>
+      </ul>
+      <p>Some providers may process data outside India, as permitted under the DPDP Act. We may also disclose data where the law requires it.</p>
+
+      <h2>5. How long we keep it</h2>
+      <ul>
+        <li>Enquiries are kept while we deal with them and deleted [365 days] after they are resolved, unless the law requires us to keep them longer.</li>
+        <li>Customer accounts are kept until you ask us to delete them. Service requests are kept for [period].</li>
+        <li>Backups may contain copies of your data for a limited time and are overwritten in the normal course.</li>
+      </ul>
+
+      <h2>6. How we protect it</h2>
+      <p>
+        Only authorised staff can see your data, through a protected admin area. Data is encrypted in transit (HTTPS). Passwords are handled by Google
+        Firebase Authentication. Customers can only see their own account and requests.
+      </p>
+
+      <h2>7. Your rights</h2>
+      <ul>
+        <li>Access a summary of the personal data we hold about you and how we use it.</li>
+        <li>Correct, complete or update your data — you can edit your profile in your account, or contact us.</li>
+        <li>Erase your data or delete your account by contacting us at {contactEmail}.</li>
+        <li>Withdraw your consent at any time, as easily as you gave it. This does not affect processing already done, but we may no longer be able to provide the service.</li>
+        <li>Nominate another person to exercise these rights if you die or become incapable.</li>
+        <li>Raise a grievance with us. We will respond within [30 days]. If you are not satisfied, you may complain to the Data Protection Board of India.</li>
+      </ul>
+      <p>To exercise these rights, contact [name or role] at {contactEmail}. We may ask you to confirm your identity first.</p>
+
+      <h2>8. Children</h2>
+      <p>This website and its services are for adults (18 or over). If you are under 18, please do not create an account or send us your details.</p>
+
+      <h2>9. Changes to this notice</h2>
+      <p>We may update this notice; the date above shows the latest version. If a change significantly affects how we use your data, we will tell you on the website or by email.</p>
+
+      <h2>10. Contact us</h2>
+      <p>[full registered legal name] · <span class="privacy__lines">{address}</span> · {contactEmail} · {contactPhone}</p>
+    </div>
+  </section>
+</SiteLayout>
+
+<style>
+  .privacy {
+    max-width: 72ch;
+  }
+
+  .privacy h2 {
+    margin-top: var(--space-5);
+    margin-bottom: var(--space-1-5);
+    font-size: var(--fs-h3);
+  }
+
+  .privacy h3 {
+    margin-top: var(--space-3);
+    margin-bottom: var(--space-1);
+    font-size: var(--fs-h4);
+  }
+
+  .privacy p,
+  .privacy li {
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+  }
+
+  .privacy ul,
+  .privacy ol {
+    display: grid;
+    gap: var(--space-1);
+    padding-left: var(--space-3);
+  }
+
+  .privacy ul {
+    list-style: disc;
+  }
+
+  .privacy ol {
+    list-style: decimal;
+  }
+
+  .privacy p + p,
+  .privacy ul + p,
+  .privacy ol + p {
+    margin-top: var(--space-1-5);
+  }
+
+  .privacy__lines {
+    white-space: pre-line;
+  }
+</style>

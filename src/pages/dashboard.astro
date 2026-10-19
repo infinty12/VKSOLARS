@@ -1,0 +1,224 @@
+---
+// Customer dashboard: profile, new service requests, and the status of the customer's OWN requests.
+// Every action re-checks the session (Firebase session cookie, revocation-checked) and its CSRF token.
+import '../styles/portal.css';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import {
+  readCustomer,
+  portalStatus,
+  checkCsrf,
+  getProfile,
+  updateProfile,
+  validateProfile,
+  validateRequest,
+  createRequest,
+  listOwnRequests,
+  cancelOwnRequest,
+  regionName,
+  requestTypeLabel,
+  REQUEST_TYPES,
+  REQUEST_STATUS_LABELS,
+  DAILY_REQUEST_LIMIT,
+  type Errors,
+} from '../lib/server/customers.ts';
+import { REGIONS } from '../lib/server/regions.ts';
+
+Astro.response.headers.set('Cache-Control', 'no-store');
+if (!portalStatus().open) return Astro.redirect('/login', 303);
+const session = await readCustomer(Astro.cookies);
+if (!session) return Astro.redirect('/login', 303);
+
+let notice: { kind: 'success' | 'error'; text: string } | null = null;
+let profileErrors: Errors = {};
+let profileDraft: import('../lib/server/customers.ts').Profile | null = null;
+let requestErrors: Errors = {};
+let requestDraft = { type: Astro.url.searchParams.get('service') ?? '', location: '', region: '', systemSize: '', message: '' };
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  if (!checkCsrf(session, form.get('_csrf'))) return new Response('Invalid security token. Reload the page and try again.', { status: 403 });
+  const action = String(form.get('_action') ?? '');
+  if (action === 'profile') {
+    const r = validateProfile(Object.fromEntries(form));
+    if (r.ok) {
+      await updateProfile(session.uid, r.value);
+      return Astro.redirect('/dashboard?saved=profile#profile', 303);
+    }
+    profileErrors = r.errors;
+    profileDraft = r.value;
+    notice = { kind: 'error', text: 'Your profile was not saved. Correct the highlighted fields.' };
+  } else if (action === 'request') {
+    const r = validateRequest(Object.fromEntries(form));
+    requestDraft = r.value;
+    if (r.ok) {
+      const created = await createRequest(session.uid, r.value);
+      if (created.ok) return Astro.redirect(`/dashboard?submitted=${encodeURIComponent(created.request.reference)}#requests`, 303);
+      notice = { kind: 'error', text: `You can submit up to ${DAILY_REQUEST_LIMIT} requests a day. Please try again tomorrow or contact us.` };
+    } else {
+      requestErrors = r.errors;
+      notice = { kind: 'error', text: 'Your request was not sent. Correct the highlighted fields.' };
+    }
+  } else if (action === 'cancel') {
+    const ok = await cancelOwnRequest(session.uid, String(form.get('id') ?? ''));
+    return Astro.redirect(`/dashboard?${ok ? 'cancelled=1' : 'notcancelled=1'}#requests`, 303);
+  }
+  Astro.response.status = 422;
+}
+
+const profile = await getProfile(session.uid);
+if (!profile) return Astro.redirect('/login', 303);
+const requests = await listOwnRequests(session.uid);
+const sp = Astro.url.searchParams;
+const submittedRef = /^REQ-\d{8}-[0-9A-F]{6}$/.test(sp.get('submitted') ?? '') ? sp.get('submitted') : null;
+notice ??= submittedRef
+  ? { kind: 'success', text: `Thank you — request ${submittedRef} has been received. You can follow its status below.` }
+  : sp.get('saved') === 'profile'
+    ? { kind: 'success', text: 'Your profile has been updated.' }
+    : sp.get('cancelled')
+      ? { kind: 'success', text: 'Your request has been cancelled.' }
+      : sp.get('notcancelled')
+        ? { kind: 'error', text: 'That request can no longer be cancelled. Please contact us.' }
+        : sp.get('welcome')
+          ? { kind: 'success', text: 'Your account has been created.' }
+          : null;
+
+const pValues = profileDraft ?? profile;
+const states = REGIONS.filter((r) => r.type === 'state');
+const uts = REGIONS.filter((r) => r.type === 'ut');
+const fmt = (iso: string) => (iso ? new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '');
+---
+
+<SiteLayout title="My account" description="Your VK Solar requests and profile." noindex>
+  <section class="portal">
+    <div class="container">
+      <div class="portal-head">
+        <h1>My account</h1>
+        <form method="post" action="/logout">
+          <input type="hidden" name="_csrf" value={session.csrf} />
+          <button type="submit" class="portal-btn portal-btn--secondary">Sign out</button>
+        </form>
+      </div>
+
+      {
+        notice && (
+          <p class:list={['portal-alert', `portal-alert--${notice.kind}`]} role={notice.kind === 'error' ? 'alert' : 'status'}>
+            {notice.text}
+          </p>
+        )
+      }
+
+      <div class="portal-card" id="requests">
+        <h2>My requests</h2>
+        {
+          requests.length === 0 ? (
+            <p class="portal-lead">You have not made any requests yet.</p>
+          ) : (
+            <ul class="portal-requests" role="list">
+              {requests.map((r) => (
+                <li class="portal-request">
+                  <div class="portal-request__top">
+                    <strong>{requestTypeLabel(r.type)}</strong>
+                    <span class:list={['portal-status', `portal-status--${r.status}`]}>{REQUEST_STATUS_LABELS[r.status]}</span>
+                  </div>
+                  <p class="portal-request__meta">
+                    <span class="mono">{r.reference}</span> · {r.location}
+                    {regionName(r.region) ? `, ${regionName(r.region)}` : ''} · submitted {fmt(r.createdAt)}
+                    {r.updatedAt !== r.createdAt ? ` · updated ${fmt(r.updatedAt)}` : ''}
+                  </p>
+                  {['submitted', 'reviewing'].includes(r.status) && (
+                    <form method="post">
+                      <input type="hidden" name="_csrf" value={session.csrf} />
+                      <input type="hidden" name="_action" value="cancel" />
+                      <input type="hidden" name="id" value={r.id} />
+                      <button type="submit" class="portal-btn portal-btn--secondary">
+                        Cancel request<span class="sr-only"> {r.reference}</span>
+                      </button>
+                    </form>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )
+        }
+      </div>
+
+      <div class="portal-card" id="new-request">
+        <h2>Request a service</h2>
+        <p class="portal-lead">Tell us what you need. Our team will review it and contact you to arrange a visit.</p>
+        <form method="post" class="portal-form" novalidate>
+          <input type="hidden" name="_csrf" value={session.csrf} />
+          <input type="hidden" name="_action" value="request" />
+          <div class="portal-field">
+            <label for="r-type">Service</label>
+            <select id="r-type" name="type" required aria-invalid={requestErrors.type ? 'true' : undefined} aria-describedby={requestErrors.type ? 'e-r-type' : undefined}>
+              <option value="">Select a service…</option>
+              {REQUEST_TYPES.map((t) => <option value={t.value} selected={requestDraft.type === t.value}>{t.label}</option>)}
+            </select>
+            {requestErrors.type && <p class="portal-error" id="e-r-type">{requestErrors.type}</p>}
+          </div>
+          <div class="portal-grid">
+            <div class="portal-field">
+              <label for="r-location">Site location (town or city)</label>
+              <input id="r-location" name="location" required maxlength="120" value={requestDraft.location} aria-invalid={requestErrors.location ? 'true' : undefined} aria-describedby={requestErrors.location ? 'e-r-location' : undefined} />
+              {requestErrors.location && <p class="portal-error" id="e-r-location">{requestErrors.location}</p>}
+            </div>
+            <div class="portal-field">
+              <label for="r-region">State or UT</label>
+              <select id="r-region" name="region" required aria-invalid={requestErrors.region ? 'true' : undefined} aria-describedby={requestErrors.region ? 'e-r-region' : undefined}>
+                <option value="">Select…</option>
+                <optgroup label="States">{states.map((r) => <option value={r.code} selected={(requestDraft.region || profile.region) === r.code}>{r.name}</option>)}</optgroup>
+                <optgroup label="Union territories">{uts.map((r) => <option value={r.code} selected={(requestDraft.region || profile.region) === r.code}>{r.name}</option>)}</optgroup>
+              </select>
+              {requestErrors.region && <p class="portal-error" id="e-r-region">{requestErrors.region}</p>}
+            </div>
+          </div>
+          <div class="portal-field">
+            <label for="r-size">System size <span class="portal-hint">(optional, e.g. 50 kW)</span></label>
+            <input id="r-size" name="systemSize" maxlength="40" value={requestDraft.systemSize} />
+          </div>
+          <div class="portal-field">
+            <label for="r-message">Details <span class="portal-hint">(optional)</span></label>
+            <textarea id="r-message" name="message" maxlength="1000" aria-invalid={requestErrors.message ? 'true' : undefined} aria-describedby={requestErrors.message ? 'e-r-message' : undefined}>{requestDraft.message}</textarea>
+            {requestErrors.message && <p class="portal-error" id="e-r-message">{requestErrors.message}</p>}
+          </div>
+          <p class="portal-hint">We use these details only to review, schedule and carry out this request, and to update you on it. See our <a href="/privacy">Privacy Notice</a>.</p>
+          <div><button type="submit" class="portal-btn">Send request</button></div>
+        </form>
+      </div>
+
+      <div class="portal-card" id="profile">
+        <h2>My profile</h2>
+        <p class="portal-lead">Signed in as <strong>{session.email}</strong>.</p>
+        <form method="post" class="portal-form" novalidate>
+          <input type="hidden" name="_csrf" value={session.csrf} />
+          <input type="hidden" name="_action" value="profile" />
+          <div class="portal-grid">
+            <div class="portal-field">
+              <label for="p-name">Full name</label>
+              <input id="p-name" name="name" autocomplete="name" required maxlength="80" value={pValues.name} aria-invalid={profileErrors.name ? 'true' : undefined} aria-describedby={profileErrors.name ? 'e-p-name' : undefined} />
+              {profileErrors.name && <p class="portal-error" id="e-p-name">{profileErrors.name}</p>}
+            </div>
+            <div class="portal-field">
+              <label for="p-phone">Phone number</label>
+              <input id="p-phone" name="phone" type="tel" autocomplete="tel" required maxlength="20" value={pValues.phone} aria-invalid={profileErrors.phone ? 'true' : undefined} aria-describedby={profileErrors.phone ? 'e-p-phone' : undefined} />
+              {profileErrors.phone && <p class="portal-error" id="e-p-phone">{profileErrors.phone}</p>}
+            </div>
+            <div class="portal-field">
+              <label for="p-city">City or town</label>
+              <input id="p-city" name="city" autocomplete="address-level2" maxlength="80" value={pValues.city} />
+            </div>
+            <div class="portal-field">
+              <label for="p-region">State or UT</label>
+              <select id="p-region" name="region">
+                <option value="">Select…</option>
+                <optgroup label="States">{states.map((r) => <option value={r.code} selected={pValues.region === r.code}>{r.name}</option>)}</optgroup>
+                <optgroup label="Union territories">{uts.map((r) => <option value={r.code} selected={pValues.region === r.code}>{r.name}</option>)}</optgroup>
+              </select>
+            </div>
+          </div>
+          <div><button type="submit" class="portal-btn portal-btn--secondary">Save profile</button></div>
+        </form>
+      </div>
+    </div>
+  </section>
+</SiteLayout>

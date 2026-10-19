@@ -1,0 +1,131 @@
+---
+// All customer requests (Firebase). Admin-only (middleware: admin sign-in, local access, no-store/noindex).
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { adminListRequests, isRequestStatus, requestTypeLabel, regionName, REQUEST_STATUSES, REQUEST_STATUS_LABELS, type RequestStatus } from '../../../lib/server/customers.ts';
+import { getFirebaseConfig } from '../../../lib/server/firebase/config.ts';
+import { flashFrom } from '../../../lib/server/http.ts';
+
+const sp = Astro.url.searchParams;
+const status = isRequestStatus(sp.get('status')) ? (sp.get('status') as RequestStatus) : null;
+const customer = /^[A-Za-z0-9]{10,128}$/.test(sp.get('customer') ?? '') ? sp.get('customer') : null;
+const after = (sp.get('after') ?? '').slice(0, 40);
+const ready = getFirebaseConfig().status === 'ready';
+let list: Awaited<ReturnType<typeof adminListRequests>> = [];
+let loadError = false;
+if (ready) {
+  try {
+    list = await adminListRequests({ status, uid: customer, after: after || undefined });
+  } catch (err) {
+    console.error('[admin] requests could not be loaded:', (err as Error).name);
+    loadError = true;
+  }
+}
+const fmt = (iso: string) => (iso ? new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '');
+const href = (changes: Record<string, string | null>) => {
+  const u = new URLSearchParams(sp);
+  u.delete('after');
+  for (const [k, v] of Object.entries(changes)) {
+    if (v) u.set(k, v);
+    else u.delete(k);
+  }
+  return `?${u.toString()}`;
+};
+---
+
+<AdminLayout title="Customer requests" crumbs={[{ label: 'Customer requests' }]} flash={flashFrom(Astro.url)}>
+  <nav class="req-tabs" aria-label="Filter by status">
+    <a href={href({ status: null })} aria-current={!status ? 'page' : undefined}>All</a>
+    {
+      REQUEST_STATUSES.map((s) => (
+        <a href={href({ status: s })} aria-current={status === s ? 'page' : undefined}>
+          {REQUEST_STATUS_LABELS[s]}
+        </a>
+      ))
+    }
+  </nav>
+  {customer && <p class="admin-hint">Showing one customer's requests. <a href={href({ customer: null })}>Show all</a></p>}
+
+  {
+    !ready ? (
+      <div class="admin-card admin-empty">
+        <p>Firebase is not configured yet, so there are no customer requests. See README → Firebase.</p>
+      </div>
+    ) : loadError ? (
+      <div class="admin-card admin-empty">
+        <p>Requests could not be loaded from Firebase. Check the configuration with npm run firebase:check.</p>
+      </div>
+    ) : list.length === 0 ? (
+      <div class="admin-card admin-empty">
+        <p>No requests match.</p>
+      </div>
+    ) : (
+      <div class="admin-table-wrap">
+        <table class="admin-table admin-table--stack">
+          <caption class="sr-only">Customer requests, newest first</caption>
+          <thead>
+            <tr>
+              <th scope="col">Request</th>
+              <th scope="col">Service</th>
+              <th scope="col">Location</th>
+              <th scope="col">Submitted</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((r) => (
+              <tr>
+                <th scope="row">
+                  <a href={`/admin/requests/${r.id}`} class="mono">
+                    {r.reference}
+                  </a>
+                </th>
+                <td data-label="Service">{requestTypeLabel(r.type)}</td>
+                <td data-label="Location">{[r.location, regionName(r.region)].filter(Boolean).join(', ')}</td>
+                <td data-label="Submitted">{fmt(r.createdAt)}</td>
+                <td data-label="Status">
+                  <span class="admin-badge">{REQUEST_STATUS_LABELS[r.status]}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+  {
+    list.length === 50 && (
+      <nav class="admin-pager" aria-label="Pagination">
+        <span />
+        <a href={`${href({})}&after=${encodeURIComponent(list[list.length - 1].createdAt)}`} class="admin-btn admin-btn--secondary">
+          Older
+        </a>
+      </nav>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .req-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+  }
+
+  .req-tabs a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding-inline: var(--space-1-5);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    text-decoration: none;
+    font-size: var(--fs-sm);
+  }
+
+  .req-tabs a[aria-current='page'] {
+    background: var(--brand-solar);
+    color: var(--white);
+    border-color: var(--brand-solar);
+  }
+</style>

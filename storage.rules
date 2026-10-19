@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// VK Solar: uploaded images are stored privately and served only through the website's
+// /media route (which checks each file is registered). Browsers never read or write the bucket
+// directly, so every client request is denied. The server uses the Admin SDK.
+//
+// NOT deployed automatically. Deploy only with explicit approval:
+//   npx firebase deploy --only storage --project <alias>
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

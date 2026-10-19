@@ -1,0 +1,197 @@
+---
+// One customer request: details, customer contact, status changes and internal notes (admin-only).
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Csrf from '../../../components/admin/Csrf.astro';
+import { adminGetRequest, adminSetStatus, adminAddNote, isRequestStatus, requestTypeLabel, regionName, REQUEST_STATUSES, REQUEST_STATUS_LABELS, NOTE_MAX } from '../../../lib/server/customers.ts';
+import { getFirebaseConfig } from '../../../lib/server/firebase/config.ts';
+import { audit } from '../../../lib/server/audit.ts';
+import { flashFrom } from '../../../lib/server/http.ts';
+
+if (getFirebaseConfig().status !== 'ready') return Astro.redirect('/admin/requests', 303);
+const id = String(Astro.params.id ?? '');
+const admin = Astro.locals.admin!.user;
+let actionError: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('_action') ?? '');
+  if (action === 'status') {
+    const status = String(form.get('status') ?? '');
+    if (isRequestStatus(status) && (await adminSetStatus(id, status))) {
+      audit('request.status', { userId: admin.id, targetType: 'customer_request', targetId: id, detail: { status } });
+      return Astro.redirect(`/admin/requests/${id}?msg=status`, 303);
+    }
+    actionError = 'Choose a valid status.';
+  } else if (action === 'note') {
+    if (await adminAddNote(id, String(form.get('note') ?? ''), admin.username)) {
+      audit('request.note', { userId: admin.id, targetType: 'customer_request', targetId: id });
+      return Astro.redirect(`/admin/requests/${id}?msg=note#notes`, 303);
+    }
+    actionError = `Enter a note of up to ${NOTE_MAX} characters.`;
+  } else {
+    actionError = 'Unknown action.';
+  }
+  Astro.response.status = 422;
+}
+
+const data = await adminGetRequest(id);
+if (!data) return Astro.redirect('/admin/requests?msg=notfound', 303);
+const { request: r, customer, notes } = data;
+const fmt = (iso: string) => (iso ? new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '');
+const flash = actionError ? { kind: 'error' as const, text: actionError } : flashFrom(Astro.url);
+---
+
+<AdminLayout title={`Request ${r.reference}`} crumbs={[{ label: 'Customer requests', href: '/admin/requests' }, { label: r.reference }]} flash={flash}>
+  <div class="rq-layout">
+    <section class="admin-card" aria-labelledby="rq-details">
+      <h2 id="rq-details">Request</h2>
+      <dl class="rq-dl">
+        <div><dt>Service</dt><dd>{requestTypeLabel(r.type)}</dd></div>
+        <div><dt>Status</dt><dd><span class="admin-badge">{REQUEST_STATUS_LABELS[r.status]}</span></dd></div>
+        <div><dt>Location</dt><dd>{[r.location, regionName(r.region)].filter(Boolean).join(', ')}</dd></div>
+        <div><dt>System size</dt><dd>{r.systemSize || '—'}</dd></div>
+        <div><dt>Submitted</dt><dd>{fmt(r.createdAt)}</dd></div>
+        <div class="rq-wide"><dt>Details</dt><dd class="rq-pre">{r.message || '—'}</dd></div>
+      </dl>
+      <h3 class="rq-sub">Status history</h3>
+      <ol class="rq-history">
+        {r.history.map((h) => <li>{REQUEST_STATUS_LABELS[h.status]} — {fmt(h.at)}</li>)}
+      </ol>
+    </section>
+
+    <div class="rq-side">
+      <section class="admin-card" aria-labelledby="rq-customer">
+        <h2 id="rq-customer">Customer</h2>
+        {
+          customer ? (
+            <dl class="rq-dl">
+              <div><dt>Name</dt><dd>{customer.name}</dd></div>
+              <div><dt>Email</dt><dd><a href={`mailto:${customer.email}`}>{customer.email}</a></dd></div>
+              <div><dt>Phone</dt><dd><a href={`tel:${customer.phone.replace(/[^\d+]/g, '')}`}>{customer.phone}</a></dd></div>
+              <div><dt>Location</dt><dd>{[customer.city, regionName(customer.region)].filter(Boolean).join(', ') || '—'}</dd></div>
+            </dl>
+          ) : (
+            <p class="admin-hint">This customer's profile no longer exists.</p>
+          )
+        }
+      </section>
+
+      <section class="admin-card" aria-labelledby="rq-status">
+        <h2 id="rq-status">Update status</h2>
+        <p class="admin-hint">The customer sees the new status in their dashboard.</p>
+        <form method="post" class="rq-form">
+          <Csrf />
+          <input type="hidden" name="_action" value="status" />
+          <div class="admin-field">
+            <label for="status">Status</label>
+            <select id="status" name="status">
+              {REQUEST_STATUSES.map((s) => <option value={s} selected={s === r.status}>{REQUEST_STATUS_LABELS[s]}</option>)}
+            </select>
+          </div>
+          <button type="submit" class="admin-btn admin-btn--primary">Update status</button>
+        </form>
+      </section>
+    </div>
+
+    <section class="admin-card rq-notes" id="notes" aria-labelledby="rq-notes-title">
+      <h2 id="rq-notes-title">Internal notes</h2>
+      <p class="admin-hint">Visible to administrators only — never shown to the customer.</p>
+      {
+        notes.length === 0 ? (
+          <p class="admin-hint">No notes yet.</p>
+        ) : (
+          <ol class="rq-note-list">
+            {notes.map((n) => (
+              <li>
+                <p class="admin-hint">{n.author} · {fmt(n.createdAt)}</p>
+                <p class="rq-pre">{n.body}</p>
+              </li>
+            ))}
+          </ol>
+        )
+      }
+      <form method="post" class="rq-form">
+        <Csrf />
+        <input type="hidden" name="_action" value="note" />
+        <div class="admin-field">
+          <label for="note">Add a note</label>
+          <textarea id="note" name="note" maxlength={NOTE_MAX} required></textarea>
+        </div>
+        <button type="submit" class="admin-btn admin-btn--secondary">Save note</button>
+      </form>
+    </section>
+  </div>
+</AdminLayout>
+
+<style>
+  .rq-layout {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .rq-layout .admin-card + .admin-card {
+    margin-top: 0;
+  }
+
+  .rq-side {
+    display: grid;
+    gap: var(--space-3);
+    align-content: start;
+  }
+
+  .rq-dl {
+    display: grid;
+    gap: var(--space-1-5);
+    margin-top: var(--space-1-5);
+  }
+
+  .rq-dl dt {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+  }
+
+  .rq-dl dd {
+    overflow-wrap: anywhere;
+  }
+
+  .rq-pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .rq-sub {
+    margin-top: var(--space-2);
+    font-size: var(--fs-base);
+  }
+
+  .rq-history,
+  .rq-note-list {
+    display: grid;
+    gap: var(--space-1);
+    margin-top: var(--space-1);
+  }
+
+  .rq-form {
+    display: grid;
+    gap: var(--space-1-5);
+    justify-items: start;
+    margin-top: var(--space-1-5);
+  }
+
+  .rq-form .admin-field {
+    width: 100%;
+  }
+
+  @media (min-width: 1100px) {
+    .rq-layout {
+      grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+    }
+
+    .rq-notes {
+      grid-column: 1;
+    }
+  }
+</style>

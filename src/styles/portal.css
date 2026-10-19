@@ -1,0 +1,226 @@
+/* Customer portal (/register, /login, /dashboard). Uses the site's design tokens. */
+.portal {
+  padding-block: var(--space-6) var(--space-8);
+}
+
+.portal__narrow {
+  max-width: 520px;
+  margin-inline: auto;
+}
+
+.portal-card {
+  padding: clamp(var(--space-3), 4vw, var(--space-5));
+  background: var(--white);
+  border: var(--border-thin);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+
+.portal-card + .portal-card {
+  margin-top: var(--space-4);
+}
+
+.portal-card h1,
+.portal-card h2 {
+  font-size: var(--fs-h3);
+  margin-bottom: var(--space-1);
+}
+
+.portal-lead {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+.portal-form {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.portal-grid {
+  display: grid;
+  gap: var(--space-2);
+}
+
+@media (min-width: 720px) {
+  .portal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.portal-field {
+  display: grid;
+  gap: 6px;
+}
+
+.portal-field label {
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-sm);
+}
+
+.portal-field input,
+.portal-field select,
+.portal-field textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.6rem 0.85rem;
+  border: 1.5px solid var(--color-border-control);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  font: inherit;
+}
+
+.portal-field textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.portal-field [aria-invalid='true'] {
+  border-color: var(--color-error);
+}
+
+.portal-check {
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+  font-weight: var(--fw-regular) !important;
+}
+
+.portal-field .portal-check input {
+  flex-shrink: 0;
+  width: 24px;
+  min-height: 0;
+  height: 24px;
+  margin-top: 2px;
+  padding: 0;
+}
+
+.portal-hint {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.portal-error {
+  font-size: var(--fs-sm);
+  color: var(--color-error);
+  font-weight: var(--fw-medium);
+}
+
+.portal-alert {
+  padding: var(--space-1-5) var(--space-2);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  border: 1.5px solid;
+}
+
+.portal-alert--error {
+  color: var(--color-error);
+  border-color: var(--color-error);
+  background: var(--color-error-bg, #fef3f2);
+}
+
+.portal-alert--success {
+  color: var(--color-success);
+  border-color: var(--color-success);
+  background: var(--color-success-bg, #ecfdf3);
+}
+
+.portal-alert--info {
+  color: var(--text-primary);
+  border-color: var(--color-border-strong);
+  background: var(--sky-50);
+}
+
+.portal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding-inline: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--brand-solar);
+  color: var(--white);
+  font: inherit;
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.portal-btn:hover {
+  background: var(--brand-midnight);
+}
+
+.portal-btn--secondary {
+  background: var(--white);
+  color: var(--brand-solar);
+  border: 1.5px solid var(--color-border-control);
+}
+
+.portal-btn--secondary:hover {
+  background: var(--sky-50);
+}
+
+.portal-switch {
+  margin-top: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.portal-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.portal-head h1 {
+  font-size: var(--fs-h2);
+}
+
+.portal-requests {
+  display: grid;
+  gap: var(--space-1-5);
+}
+
+.portal-request {
+  display: grid;
+  gap: 4px;
+  padding: var(--space-2);
+  border: var(--border-thin);
+  border-radius: var(--radius-md);
+  overflow-wrap: anywhere;
+}
+
+.portal-request__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+}
+
+.portal-request__meta {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.portal-status {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  background: var(--sky-50);
+  color: var(--brand-solar);
+  border: 1px solid var(--color-border-strong);
+}
+
+.portal-status--completed {
+  color: var(--color-success);
+}
+
+.portal-status--cancelled {
+  color: var(--text-secondary);
+}

@@ -9,7 +9,7 @@ const site = process.env.PUBLIC_SITE_URL || undefined;
 
 // Server-rendered pages (read from the database at request time) aren't discovered by the
 // sitemap integration automatically, so list the public ones explicitly.
-const serverRenderedPublicPages = ['/', '/services/', '/ai-drone-inspection/', '/about/', '/service-areas/', '/contact/'];
+const serverRenderedPublicPages = ['/', '/services/', '/ai-drone-inspection/', '/about/', '/service-areas/', '/contact/', '/privacy/'];
 
 export default defineConfig({
   site,
