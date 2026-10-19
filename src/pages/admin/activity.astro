@@ -1,0 +1,187 @@
+---
+// Activity (Stage 7C): read-only audit log, newest first, filterable by area and date.
+// Sign-in, local-only access and no-store/noindex come from the middleware. Only ids, counts and
+// field names are stored in the audit log; details are filtered again before display.
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { CATEGORIES, isCategory, listActivity, type Category } from '../../lib/server/activity.ts';
+
+const sp = Astro.url.searchParams;
+const category = isCategory(sp.get('area')) ? (sp.get('area') as Category) : null;
+const fromIn = (sp.get('from') ?? '').slice(0, 10);
+const toIn = (sp.get('to') ?? '').slice(0, 10);
+const result = listActivity({ category, from: fromIn, to: toIn, page: Number(sp.get('page') ?? 1) || 1 });
+const badDates = (fromIn && !result.from) || (toIn && !result.to);
+
+const href = (changes: Record<string, string | number | null>) => {
+  const u = new URLSearchParams(sp);
+  for (const [k, v] of Object.entries(changes)) {
+    if (v === null || v === '') u.delete(k);
+    else u.set(k, String(v));
+  }
+  const s = u.toString();
+  return s ? `?${s}` : '/admin/activity';
+};
+const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium' });
+const flash = badDates ? { kind: 'error' as const, text: 'One of the dates was not valid and has been ignored.' } : null;
+const filtered = Boolean(category || result.from || result.to);
+---
+
+<AdminLayout title="Activity" crumbs={[{ label: 'Activity' }]} flash={flash}>
+  <p class="act-intro">
+    A read-only record of administrative actions, newest first. It records which item changed and who changed it — never enquiry details, passwords or
+    other personal data.
+  </p>
+
+  <form method="get" class="admin-toolbar act-filters" role="search" aria-label="Filter activity">
+    <div class="admin-field">
+      <label for="area">Area</label>
+      <select id="area" name="area">
+        <option value="">All areas</option>
+        {
+          Object.entries(CATEGORIES).map(([key, c]) => (
+            <option value={key} selected={key === category}>
+              {c.label}
+            </option>
+          ))
+        }
+      </select>
+    </div>
+    <div class="admin-field">
+      <label for="from">From</label>
+      <input id="from" name="from" type="date" value={result.from ?? ''} />
+    </div>
+    <div class="admin-field">
+      <label for="to">To</label>
+      <input id="to" name="to" type="date" value={result.to ?? ''} />
+    </div>
+    <button type="submit" class="admin-btn admin-btn--secondary">Apply filters</button>
+    {filtered && <a href="/admin/activity" class="admin-btn admin-btn--secondary">Clear</a>}
+  </form>
+
+  <p class="act-count" role="status">{result.total} {result.total === 1 ? 'entry' : 'entries'}{filtered ? ' match' : ''}</p>
+
+  {
+    result.total === 0 ? (
+      <div class="admin-card admin-empty">
+        <p>{filtered ? 'No activity matches these filters.' : 'No activity recorded yet.'}</p>
+      </div>
+    ) : (
+      <div class="admin-table-wrap">
+        <table class="admin-table admin-table--stack">
+          <caption class="sr-only">Activity, newest first</caption>
+          <thead>
+            <tr>
+              <th scope="col">When</th>
+              <th scope="col">Action</th>
+              <th scope="col">By</th>
+              <th scope="col">Item</th>
+              <th scope="col">Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.rows.map((r) => (
+              <tr>
+                <td data-label="When">
+                  <time datetime={r.at}>{fmt(r.at)}</time>
+                </td>
+                <th scope="row" data-label="Action">
+                  {r.label}
+                  {r.category && <span class="act-area">{CATEGORIES[r.category].label}</span>}
+                </th>
+                <td data-label="By">{r.username ?? <span class="act-muted">—</span>}</td>
+                <td data-label="Item">
+                  {r.targetType ? (
+                    r.link ? (
+                      <a href={r.link}>
+                        {r.targetType.replace('_', ' ')}
+                        {r.targetId ? ` #${r.targetId}` : ''}
+                      </a>
+                    ) : (
+                      <span>
+                        {r.targetType.replace('_', ' ')}
+                        {r.targetId ? ` #${r.targetId}` : ''}
+                      </span>
+                    )
+                  ) : (
+                    <span class="act-muted">—</span>
+                  )}
+                </td>
+                <td data-label="Details">
+                  {r.details.length ? (
+                    <ul class="act-details" role="list">
+                      {r.details.map((d) => (
+                        <li>
+                          <span class="act-muted">{d.key}:</span> {d.value}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <span class="act-muted">—</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  {
+    result.pages > 1 && (
+      <nav class="admin-pager" aria-label="Pagination">
+        <span>
+          Page {result.page} of {result.pages}
+        </span>
+        <span>
+          {result.page > 1 && (
+            <a href={href({ page: result.page - 1 })} class="admin-btn admin-btn--secondary">
+              Newer
+            </a>
+          )}
+          {result.page < result.pages && (
+            <a href={href({ page: result.page + 1 })} class="admin-btn admin-btn--secondary">
+              Older
+            </a>
+          )}
+        </span>
+      </nav>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .act-intro {
+    max-width: 72ch;
+    margin-bottom: var(--space-2);
+    color: var(--text-secondary);
+  }
+
+  .act-filters {
+    flex-wrap: wrap;
+  }
+
+  .act-count {
+    margin-block: var(--space-2);
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+  }
+
+  .act-area {
+    display: block;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-regular);
+    color: var(--text-secondary);
+  }
+
+  .act-muted {
+    color: var(--text-secondary);
+  }
+
+  .act-details {
+    display: grid;
+    gap: 2px;
+    font-size: var(--fs-sm);
+    overflow-wrap: anywhere;
+  }
+</style>

@@ -2,11 +2,11 @@
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { dashboardCounts } from '../../lib/server/dashboard.ts';
 import { enquiryGates } from '../../lib/server/settings.ts';
-import { recentAudit } from '../../lib/server/audit.ts';
+import { listActivity } from '../../lib/server/activity.ts';
 
 const counts = dashboardCounts();
 const gates = enquiryGates();
-const audit = recentAudit(10);
+const audit = listActivity().rows.slice(0, 10);
 const n = (o: Record<string, number>, k: string) => o[k] ?? 0;
 const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 ---
@@ -65,7 +65,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 
               {audit.map((a) => (
                 <tr>
                   <td>{fmt(a.at)}</td>
-                  <td class="mono">{a.action}</td>
+                  <td>{a.link ? <a href={a.link}>{a.label}</a> : a.label}</td>
                   <td>{a.username ?? '—'}</td>
                 </tr>
               ))}
@@ -74,10 +74,15 @@ const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 
         </div>
       )
     }
+    <p class="dash-more"><a href="/admin/activity" class="admin-btn admin-btn--secondary">View all activity</a></p>
   </section>
 </AdminLayout>
 
 <style>
+  .dash-more {
+    margin-top: var(--space-2);
+  }
+
   .dash-grid {
     display: grid;
     gap: var(--space-3);

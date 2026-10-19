@@ -87,11 +87,20 @@ and no default password.
 - **Local only:** `/admin` returns 404 to any non-loopback address unless `ADMIN_ALLOW_REMOTE=true`. `server.mjs` binds to
   `127.0.0.1` and ignores `X-Forwarded-*` headers unless `TRUST_PROXY=true`.
 - **Sessions:** HttpOnly, SameSite=Strict cookie; 2 hours idle / 12 hours maximum; only a hash of the token is stored.
-  Changing a password (`admin:create -- --reset`) signs that account out everywhere.
+  Resetting a password from the terminal (`admin:create -- --reset`) signs that account out everywhere.
+- **Account (Admin → Account):** change your own password (current password required, same rules as
+  `admin:create`). On success every other session of the account ends and this one continues on a **new** session token
+  and CSRF token. Wrong current passwords count toward that account's sign-in lockout (5 failures → 15 minutes, keyed
+  by account, not IP, because every admin connects from 127.0.0.1). The page also lists your own active sessions
+  (browser, signed in, last active, end time — never tokens) with *Sign out all other sessions*. Password values are
+  never logged, audited or shown back.
 - **CSRF:** every state-changing admin request needs the session’s token; cross-site form posts are rejected.
 - **Login:** scrypt password hashes, one generic error message, lockout for 15 minutes after 5 failures.
-- **Audit log:** sign-ins, location and enquiry changes are recorded (ids and counts only — never enquiry content). The
-  dashboard shows recent activity.
+- **Audit log:** sign-ins and every administrative change are recorded (ids, counts and field names only — never enquiry
+  content, passwords or tokens). **Admin → Activity** is a read-only view: newest first, 50 per page, filter by area
+  (sign-in, service areas, enquiries, media, content, backups, account) and date range (server time zone), readable
+  labels, links to items that still exist. Details are re-filtered before display. The dashboard shows the latest 10.
+  Audit entries are kept indefinitely (no automatic clean-up).
 
 ### Service Areas (India-wide coverage)
 

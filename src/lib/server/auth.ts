@@ -168,6 +168,120 @@ export function readSession(token: string | undefined, now = Date.now()): Sessio
   };
 }
 
+// ---------------------------------------------------------------- self-service (Admin → Account)
+
+/** Lockout keys for wrong current-password attempts: the account only (every admin is on 127.0.0.1). */
+export const accountLockKeys = (username: string) => [`user:${username.toLowerCase()}`];
+
+export type ChangePasswordResult =
+  | { ok: true; token: string; csrfToken: string }
+  | { ok: false; reason: 'locked' | 'wrong_current' | 'policy' | 'mismatch' | 'same' | 'not_found'; message: string };
+
+/**
+ * Change the signed-in administrator's password. The current password is required; wrong
+ * attempts count toward the account's sign-in lockout. On success, ALL of the account's sessions
+ * end and a fresh one (new token, new CSRF token) is returned for the caller to set as its cookie.
+ */
+export function changePassword(
+  userId: number,
+  input: { current: string; next: string; confirm: string },
+  userAgent: string | null,
+  now = Date.now(),
+): ChangePasswordResult {
+  const row = getDb().prepare('SELECT username, password_hash FROM admin_users WHERE id = ?').get(userId) as
+    | { username: string; password_hash: string }
+    | undefined;
+  if (!row) return { ok: false, reason: 'not_found', message: 'Account not found.' };
+  const keys = accountLockKeys(row.username);
+  if (loginLockedUntil(keys, now)) {
+    return { ok: false, reason: 'locked', message: `Too many incorrect attempts. Try again in ${Math.round(LOGIN_LIMIT.lockMs / 60000)} minutes.` };
+  }
+  if (!input.current || !verifyPassword(input.current, row.password_hash)) {
+    recordLoginFailure(keys, now);
+    return { ok: false, reason: 'wrong_current', message: 'Your current password is incorrect.' };
+  }
+  if (input.next !== input.confirm) return { ok: false, reason: 'mismatch', message: 'The new passwords do not match.' };
+  const policy = validateNewPassword(input.next, row.username);
+  if (policy) return { ok: false, reason: 'policy', message: policy };
+  if (verifyPassword(input.next, row.password_hash)) return { ok: false, reason: 'same', message: 'Choose a password different from your current one.' };
+
+  clearLoginFailures(keys);
+  const hash = hashPassword(input.next);
+  const db = getDb();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const ts = nowIso();
+    db.prepare('UPDATE admin_users SET password_hash = ?, updated_at = ?, password_changed_at = ? WHERE id = ?').run(hash, ts, ts, userId);
+    db.prepare('DELETE FROM admin_sessions WHERE user_id = ?').run(userId);
+    const fresh = createSession(userId, userAgent, now);
+    db.exec('COMMIT');
+    return { ok: true, ...fresh };
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/** End every session of this account except the one with `currentToken`. Returns how many ended. */
+export function revokeOtherSessions(userId: number, currentToken: string | undefined): number {
+  if (!currentToken) return 0;
+  return Number(getDb().prepare('DELETE FROM admin_sessions WHERE user_id = ? AND id <> ?').run(userId, sha256(currentToken)).changes);
+}
+
+export interface OwnSession {
+  current: boolean;
+  createdAt: number;
+  lastSeenAt: number;
+  expiresAt: number;
+  device: string;
+}
+
+/** A short, non-identifying description of a browser user-agent, e.g. "Chrome on Windows". */
+export function describeUserAgent(ua: string | null): string {
+  if (!ua) return 'Unknown browser';
+  const browser = /Edg\//.test(ua)
+    ? 'Edge'
+    : /OPR\/|Opera/.test(ua)
+      ? 'Opera'
+      : /Firefox\//.test(ua)
+        ? 'Firefox'
+        : /Chrome\/|Chromium\/|HeadlessChrome\//.test(ua)
+          ? 'Chrome'
+          : /Safari\//.test(ua)
+            ? 'Safari'
+            : /curl|node|undici|python|wget/i.test(ua)
+              ? 'Script or tool'
+              : 'Unknown browser';
+  const os = /Windows/.test(ua)
+    ? 'Windows'
+    : /Android/.test(ua)
+      ? 'Android'
+      : /iPhone|iPad|iPod/.test(ua)
+        ? 'iOS'
+        : /Mac OS X|Macintosh/.test(ua)
+          ? 'macOS'
+          : /Linux/.test(ua)
+            ? 'Linux'
+            : '';
+  return os ? `${browser} on ${os}` : browser;
+}
+
+/** This account's active sessions, newest activity first. Never includes token hashes or CSRF tokens. */
+export function listOwnSessions(userId: number, currentToken: string | undefined, now = Date.now()): OwnSession[] {
+  purgeExpiredSessions(now);
+  const currentId = currentToken ? sha256(currentToken) : '';
+  const rows = getDb()
+    .prepare('SELECT id, created_at, last_seen_at, absolute_expires_at, user_agent FROM admin_sessions WHERE user_id = ? ORDER BY last_seen_at DESC')
+    .all(userId) as { id: string; created_at: number; last_seen_at: number; absolute_expires_at: number; user_agent: string | null }[];
+  return rows.map((r) => ({
+    current: r.id === currentId,
+    createdAt: r.created_at,
+    lastSeenAt: r.last_seen_at,
+    expiresAt: Math.min(r.last_seen_at + SESSION.idleMs, r.absolute_expires_at),
+    device: describeUserAgent(r.user_agent),
+  }));
+}
+
 export function deleteSession(token: string | undefined) {
   if (token) getDb().prepare('DELETE FROM admin_sessions WHERE id = ?').run(sha256(token));
 }

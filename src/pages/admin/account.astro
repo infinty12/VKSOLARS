@@ -1,0 +1,195 @@
+---
+// Account (Stage 7C): change your own password and manage your own sessions.
+// Sign-in, local-only access, CSRF and no-store/noindex come from the middleware. Password
+// values are never echoed back, logged or audited.
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Csrf from '../../components/admin/Csrf.astro';
+import { SESSION } from '../../lib/server/config.ts';
+import { PASSWORD_MIN_LENGTH, changePassword, listOwnSessions, revokeOtherSessions } from '../../lib/server/auth.ts';
+import { audit } from '../../lib/server/audit.ts';
+import { flashFrom, setStrictCookie } from '../../lib/server/http.ts';
+
+const user = Astro.locals.admin!.user;
+const currentToken = Astro.cookies.get(SESSION.cookieName)?.value;
+let pwError: { field: 'current' | 'next' | 'confirm'; message: string } | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('_action') ?? '');
+  if (action === 'password') {
+    const result = changePassword(
+      user.id,
+      {
+        current: String(form.get('current_password') ?? '').slice(0, 256),
+        next: String(form.get('new_password') ?? '').slice(0, 300),
+        confirm: String(form.get('confirm_password') ?? '').slice(0, 300),
+      },
+      Astro.request.headers.get('user-agent'),
+    );
+    if (result.ok) {
+      // Every session of this account ended; continue on the fresh one (new token and CSRF token).
+      setStrictCookie(Astro.cookies, Astro.url, SESSION.cookieName, result.token, { maxAgeSec: Math.floor(SESSION.absoluteMs / 1000) });
+      audit('account.password_changed', { userId: user.id, targetType: 'account', targetId: user.id });
+      return Astro.redirect('/admin/account?msg=passwordChanged', 303);
+    }
+    audit('account.password_change_failed', { userId: user.id, targetType: 'account', targetId: user.id, detail: { reason: result.reason } });
+    pwError = {
+      field: result.reason === 'locked' || result.reason === 'wrong_current' ? 'current' : result.reason === 'mismatch' ? 'confirm' : 'next',
+      message: result.message,
+    };
+    Astro.response.status = result.reason === 'locked' ? 429 : 422;
+  } else if (action === 'revoke_others') {
+    const count = revokeOtherSessions(user.id, currentToken);
+    audit('account.sessions_revoked', { userId: user.id, targetType: 'account', targetId: user.id, detail: { count } });
+    return Astro.redirect('/admin/account?msg=sessionsRevoked', 303);
+  } else {
+    Astro.response.status = 422;
+  }
+}
+
+const sessions = listOwnSessions(user.id, currentToken);
+const others = sessions.filter((s) => !s.current).length;
+const fmt = (ms: number) => new Date(ms).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+const flash = pwError ? { kind: 'error' as const, text: 'Your password was not changed.' } : flashFrom(Astro.url);
+const describedBy = (field: 'current' | 'next' | 'confirm', hint?: string) =>
+  [hint, pwError?.field === field ? 'pw-error' : ''].filter(Boolean).join(' ') || undefined;
+---
+
+<AdminLayout title="Account" crumbs={[{ label: 'Account' }]} flash={flash}>
+  <section class="admin-card acct-card" aria-labelledby="acct-pw-title">
+    <h2 id="acct-pw-title">Change password</h2>
+    <p class="admin-hint">
+      Signed in as <strong>{user.username}</strong>. Changing your password signs this account out everywhere else; you stay signed in here.
+    </p>
+    {
+      pwError && (
+        <p class="admin-error acct-error" id="pw-error" role="alert">
+          {pwError.message}
+        </p>
+      )
+    }
+    <form method="post" class="acct-form" autocomplete="on">
+      <Csrf />
+      <input type="hidden" name="_action" value="password" />
+      <input type="text" name="username" value={user.username} autocomplete="username" hidden />
+      <div class="admin-field">
+        <label for="current_password">Current password</label>
+        <input
+          id="current_password"
+          name="current_password"
+          type="password"
+          autocomplete="current-password"
+          required
+          maxlength="256"
+          aria-invalid={pwError?.field === 'current' ? 'true' : undefined}
+          aria-describedby={describedBy('current')}
+        />
+      </div>
+      <div class="admin-field">
+        <label for="new_password">New password</label>
+        <input
+          id="new_password"
+          name="new_password"
+          type="password"
+          autocomplete="new-password"
+          required
+          minlength={PASSWORD_MIN_LENGTH}
+          maxlength="256"
+          aria-invalid={pwError?.field === 'next' ? 'true' : undefined}
+          aria-describedby={describedBy('next', 'pw-hint')}
+        />
+        <p class="admin-hint" id="pw-hint">At least {PASSWORD_MIN_LENGTH} characters, and not containing your username. A long passphrase is best.</p>
+      </div>
+      <div class="admin-field">
+        <label for="confirm_password">Confirm new password</label>
+        <input
+          id="confirm_password"
+          name="confirm_password"
+          type="password"
+          autocomplete="new-password"
+          required
+          maxlength="256"
+          aria-invalid={pwError?.field === 'confirm' ? 'true' : undefined}
+          aria-describedby={describedBy('confirm')}
+        />
+      </div>
+      <button type="submit" class="admin-btn admin-btn--primary">Change password</button>
+    </form>
+  </section>
+
+  <section class="admin-card acct-card" aria-labelledby="acct-sessions-title">
+    <h2 id="acct-sessions-title">Where you're signed in</h2>
+    <p class="admin-hint">Your own active sessions on this computer's admin panel. Sessions end after 2 hours without activity or 12 hours in total.</p>
+    <div class="admin-table-wrap">
+      <table class="admin-table admin-table--stack">
+        <caption class="sr-only">Your active sessions, most recently used first</caption>
+        <thead>
+          <tr>
+            <th scope="col">Browser</th>
+            <th scope="col">Signed in</th>
+            <th scope="col">Last active</th>
+            <th scope="col">Ends by</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            sessions.map((s) => (
+              <tr data-session={s.current ? 'current' : 'other'}>
+                <th scope="row">
+                  {s.device}
+                  {s.current && <span class="admin-badge admin-badge--on acct-current">This session</span>}
+                </th>
+                <td data-label="Signed in">{fmt(s.createdAt)}</td>
+                <td data-label="Last active">{fmt(s.lastSeenAt)}</td>
+                <td data-label="Ends by">{fmt(s.expiresAt)}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+    <form method="post" class="acct-revoke" data-confirm="Sign out all your other sessions? This session stays signed in.">
+      <Csrf />
+      <input type="hidden" name="_action" value="revoke_others" />
+      <button type="submit" class="admin-btn admin-btn--secondary" disabled={others === 0} aria-describedby="acct-revoke-hint">
+        Sign out all other sessions
+      </button>
+      <p class="admin-hint" id="acct-revoke-hint">
+        {others === 0 ? 'There are no other sessions.' : `${others} other ${others === 1 ? 'session' : 'sessions'} will be signed out.`}
+      </p>
+    </form>
+  </section>
+</AdminLayout>
+
+<style>
+  .acct-card {
+    max-width: 760px;
+  }
+
+  .acct-form {
+    display: grid;
+    gap: var(--space-2);
+    justify-items: start;
+    max-width: 480px;
+    margin-top: var(--space-2);
+  }
+
+  .acct-form .admin-field {
+    width: 100%;
+  }
+
+  .acct-error {
+    margin-top: var(--space-1-5);
+  }
+
+  .acct-current {
+    margin-left: var(--space-1);
+  }
+
+  .acct-revoke {
+    display: grid;
+    gap: var(--space-1);
+    justify-items: start;
+    margin-top: var(--space-2);
+  }
+</style>

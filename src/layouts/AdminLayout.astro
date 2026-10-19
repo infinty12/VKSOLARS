@@ -25,6 +25,8 @@ const nav: { label: string; href: string; icon: IconName }[] = [
   { label: 'Site content', href: '/admin/content', icon: 'layers' },
   { label: 'Media', href: '/admin/media', icon: 'camera' },
   { label: 'Backups', href: '/admin/backups', icon: 'shield' },
+  { label: 'Activity', href: '/admin/activity', icon: 'activity' },
+  { label: 'Account', href: '/admin/account', icon: 'users' },
 ];
 const isActive = (href: string) => (href === '/admin' ? path === '/admin' : path === href || path.startsWith(`${href}/`));
 ---

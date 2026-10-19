@@ -52,6 +52,8 @@ export const FLASH = {
   itemDiscarded: { kind: 'success', text: 'Unpublished edits discarded. The draft matches the published version again.' },
   itemIsPublished: { kind: 'error', text: 'Unpublish this item before deleting it.' },
   itemMoved: { kind: 'success', text: 'Order updated. The website uses the new order.' },
+  passwordChanged: { kind: 'success', text: 'Password changed. You are still signed in here; all other sessions were signed out.' },
+  sessionsRevoked: { kind: 'success', text: 'All your other sessions were signed out.' },
   notfound: { kind: 'error', text: 'That item no longer exists.' },
 } as const satisfies Record<string, { kind: 'success' | 'error' | 'info'; text: string }>;
 
