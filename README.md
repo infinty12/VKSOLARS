@@ -300,9 +300,12 @@ Nothing is pre-filled: enter only real, confirmed information.
   client's approval confirmation; team members need their **consent**; achievements need **evidence** and a "verified"
   confirmation. Source, approval and evidence notes are internal: they are never sent to public pages.
 - **Ordering:** *Up*/*Down* on the list. Takes effect on the website immediately (order isn't private); audit-logged.
-- **Team photos** are chosen from the media library (its alt text is used, else "Portrait of {name}"). The draft and the
-  published version each record a media usage, so the image can't be deleted while either uses it; unpublishing,
-  republishing without it, or deleting the member releases it.
+- **Team photos** are chosen from the media library. The draft and the published version each record a media usage, so
+  the image can't be deleted while either uses it; unpublishing, republishing without it, or deleting the member releases
+  it. The image's alt text is **copied into the draft when it is saved** (else "Portrait of {name}" is used), so editing
+  the alt text in Media changes the live profile only after the member is saved and published again — the editor flags
+  when Media's text differs. (Profiles published before this was added use the library's current text until re-saved.)
+  If the chosen image is deleted at the moment of saving, the save is refused with a field error and nothing is written.
 - **Safe values:** plain text with length and line limits, figures as whole numbers, escaped on output with line breaks
   kept by CSS; stored items are validated again when read and invalid published items are skipped. No reviews or ratings
   are added to structured data.

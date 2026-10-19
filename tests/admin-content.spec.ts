@@ -242,6 +242,52 @@ test.describe('verified content', () => {
     await visitor.close();
   });
 
+  test('7B.1: changing a team photo’s alt text in Media does not change the live profile until republished', async ({ page, browser }) => {
+    await page.goto(`${CONTENT_BASE}/admin/media`);
+    const png = await sharp({ create: { width: 120, height: 120, channels: 3, background: { r: 5, g: 38, b: 89 } } }).png().toBuffer();
+    await page.getByLabel('Image file').setInputFiles({ name: 'alt-test.png', mimeType: 'image/png', buffer: png });
+    await page.getByLabel(/^Alt text/).fill('Alt text one (example)');
+    await page.getByRole('button', { name: 'Upload image' }).click();
+    await expect(page).toHaveURL(/\/admin\/media\/\d+\?msg=uploaded$/);
+    const mediaPage = page.url().replace(/\?.*$/, '');
+    const mediaId = mediaPage.match(/(\d+)$/)![1];
+
+    const url = await createItem(page, 'team', { name: 'Alt Flow (example)', role: 'Test role', photoId: mediaId, consent: true });
+    await expect(page.locator('[data-photo-alt]')).toContainText('Alt text one (example)');
+    await confirmAction(page, 'Publish', 'itemPublished');
+
+    // Change the alt text in Media.
+    await page.goto(mediaPage);
+    await expect(page.locator('[data-team-alt-note]')).toBeVisible();
+    await page.getByLabel('Description of the image').fill('Alt text two (example)');
+    await page.getByRole('button', { name: 'Save alt text' }).click();
+    await expect(page).toHaveURL(/msg=saved$/);
+
+    const visitor = await visitorPage(browser);
+    await visitor.page.goto(`${CONTENT_BASE}/about`);
+    await expect(visitor.page.getByRole('img', { name: 'Alt text one (example)' })).toBeVisible();
+    await expect(visitor.page.getByRole('img', { name: 'Alt text two (example)' })).toHaveCount(0);
+
+    // The editor flags it; saving makes it an unpublished change; publishing makes it live.
+    await page.goto(url);
+    await expect(page.locator('[data-alt-outdated]')).toBeVisible();
+    await page.getByRole('button', { name: 'Save draft' }).click();
+    await expect(page.getByText('your latest edits are not public yet')).toBeVisible();
+    await expect(page.locator('[data-alt-outdated]')).toHaveCount(0);
+    await visitor.page.reload();
+    await expect(visitor.page.getByRole('img', { name: 'Alt text one (example)' })).toBeVisible();
+    await confirmAction(page, 'Publish changes', 'itemPublished');
+    await visitor.page.reload();
+    await expect(visitor.page.getByRole('img', { name: 'Alt text two (example)' })).toBeVisible();
+    await visitor.close();
+
+    // Clean up: unpublish, delete the member, then the image.
+    await confirmAction(page, 'Unpublish', 'itemUnpublished');
+    await confirmAction(page, 'Delete', 'deleted');
+    await page.goto(mediaPage);
+    await confirmAction(page, 'Delete image', 'deleted');
+  });
+
   test('admin content pages and the preview have no detectable WCAG A/AA violations', async ({ page }) => {
     await page.goto(ADMIN);
     const first = await page.locator('.ct-item__link').first().getAttribute('href');

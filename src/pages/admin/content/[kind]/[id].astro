@@ -18,6 +18,7 @@ import {
   toFormValues,
   unpublishItem,
   validateItem,
+  PhotoUnavailableError,
   type FormValues,
 } from '../../../../lib/server/content-items.ts';
 import { getMedia, mediaUrl, thumbSize } from '../../../../lib/server/media.ts';
@@ -45,11 +46,19 @@ if (Astro.request.method === 'POST') {
     for (const f of FIELDS[kind]) submitted[f.name] = String(form.get(f.name) ?? '').slice(0, 2000);
     const r = validateItem(kind, submitted);
     if (r.ok) {
-      const savedId = isNew ? createItem(kind, r.value, userId) : (saveItemDraft(id, r.value, userId), id);
-      return Astro.redirect(`/admin/content/${kind}/${savedId}?msg=itemSaved`, 303);
+      try {
+        const savedId = isNew ? createItem(kind, r.value, userId) : (saveItemDraft(id, r.value, userId), id);
+        return Astro.redirect(`/admin/content/${kind}/${savedId}?msg=itemSaved`, 303);
+      } catch (err) {
+        if (!(err instanceof PhotoUnavailableError)) throw err;
+        // The image was deleted after it was chosen: nothing was saved.
+        values = { ...submitted, photoId: '' };
+        errors = { photoId: 'That image is no longer in the media library. Choose another image, or no photo.' };
+      }
+    } else {
+      values = submitted;
+      errors = r.errors;
     }
-    values = submitted;
-    errors = r.errors;
     actionError = 'The draft was not saved. Correct the highlighted fields.';
   } else if (!isNew && action === 'publish') {
     const r = publishItem(id, userId);
@@ -80,6 +89,9 @@ const flash = actionError ? { kind: 'error' as const, text: actionError } : flas
 const pending = problems.length ? problems : (item?.problems ?? []);
 const media = FIELDS[kind].some((f) => f.type === 'media') ? mediaOptions() : [];
 const selectedPhoto = values.photoId ? getMedia(Number(values.photoId)) : null;
+// Alt text saved with the draft (what will be published) vs the library's current text.
+const savedAlt = typeof item?.draft?.photoAlt === 'string' && item?.draft?.photoId === selectedPhoto?.id ? item.draft.photoAlt : null;
+const altOutdated = selectedPhoto !== null && savedAlt !== null && savedAlt !== selectedPhoto.altText;
 const describedBy = (name: string, hint?: string) => [hint ? `h-${name}` : '', errors[name] ? `err-${name}` : ''].filter(Boolean).join(' ') || undefined;
 ---
 
@@ -240,6 +252,17 @@ const describedBy = (name: string, hint?: string) => [hint ? `h-${name}` : '', e
               )}
               {f.type === 'media' && selectedPhoto && (
                 <img class="ci-photo" src={mediaUrl(selectedPhoto.uid, true)} {...thumbSize(selectedPhoto)} alt={selectedPhoto.altText} />
+              )}
+              {f.type === 'media' && savedAlt !== null && (
+                <p class="admin-hint" data-photo-alt>
+                  Alt text saved with this draft: {savedAlt ? `“${savedAlt}”` : 'none (“Portrait of …” is used)'}. Changing it in Media takes effect
+                  here only after you save this draft again and publish.
+                </p>
+              )}
+              {f.type === 'media' && altOutdated && (
+                <p class="ci-todo" role="status" data-alt-outdated>
+                  The image’s alt text in Media has changed since this draft was saved. Save the draft to use the new text, then publish.
+                </p>
               )}
               {errors[f.name] && (
                 <p class="admin-error" id={`err-${f.name}`}>

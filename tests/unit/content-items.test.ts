@@ -159,6 +159,71 @@ test('team photos: usage is tracked for draft and published versions and blocks 
   assert.deepEqual(M.deleteMedia(other.id, null), { ok: true });
 });
 
+test('7B.1: a photo alt-text change in Media reaches the website only after save + publish', async () => {
+  const photo = await uploadPhoto('Alt version one');
+  const id = C.createItem('team', ok('team', { name: 'Alt Test (example)', role: 'Role', photoId: String(photo.id), consent: 'on' }), null);
+  C.publishItem(id, null);
+  const alt = () => C.publicContent().team.find((m) => m.name === 'Alt Test (example)')!.photo!.alt;
+  assert.equal(alt(), 'Alt version one');
+
+  // Edit the alt text in the media library: the live profile does not change.
+  assert.deepEqual(M.updateAltText(photo.id, 'Alt version two', null), { ok: true });
+  assert.equal(alt(), 'Alt version one', 'published copy unchanged');
+  assert.equal(C.draftPreviewContent().team.find((m) => m.name === 'Alt Test (example)')!.photo!.alt, 'Alt version one', 'draft unchanged until saved');
+  assert.equal(C.getItem(id)!.status, 'published');
+
+  // Saving the draft picks up the new text as an unpublished change; publishing makes it live.
+  C.saveItemDraft(id, C.getItem(id)!.draft!, null);
+  assert.equal(C.getItem(id)!.status, 'changed');
+  assert.equal(C.getItem(id)!.draft!.photoAlt, 'Alt version two');
+  assert.equal(alt(), 'Alt version one', 'still not public');
+  const save = getDb().prepare("SELECT detail FROM audit_log WHERE action = 'content.item.save' AND target_id = ? ORDER BY id DESC LIMIT 1").get(String(id)) as { detail: string };
+  assert.deepEqual(JSON.parse(save.detail).changed, ['photoAlt'], 'audit names the field, not the text');
+  C.publishItem(id, null);
+  assert.equal(alt(), 'Alt version two');
+
+  C.unpublishItem(id, null);
+  C.deleteItem(id, null);
+  M.deleteMedia(photo.id, null);
+});
+
+test('7B.1: profiles published before alt text was saved with them keep using the library text', async () => {
+  const photo = await uploadPhoto('Library alt');
+  const now = new Date().toISOString();
+  const legacy = JSON.stringify({ name: 'Legacy (example)', role: 'Role', bio: '', photoId: photo.id, consent: true });
+  const id = Number(
+    getDb().prepare("INSERT INTO content_items (kind, position, draft_data, published_data, published_at, created_at, updated_at) VALUES ('team', 50, ?, ?, ?, ?, ?)").run(legacy, legacy, now, now, now).lastInsertRowid,
+  );
+  assert.equal(C.publicContent().team.find((m) => m.name === 'Legacy (example)')!.photo!.alt, 'Library alt');
+  getDb().prepare('DELETE FROM content_items WHERE id = ?').run(id);
+  M.deleteMedia(photo.id, null);
+});
+
+test('7B.1: a photo deleted between choosing and saving is refused cleanly — nothing is saved', async () => {
+  const photo = await uploadPhoto('Soon gone');
+  const count = () => (getDb().prepare("SELECT COUNT(*) AS n FROM content_items WHERE kind = 'team'").get() as { n: number }).n;
+  const usages = () => (getDb().prepare("SELECT COUNT(*) AS n FROM media_usages WHERE usage_type = 'Team member'").get() as { n: number }).n;
+
+  // New item: validated while the image existed, then the image disappears (e.g. another process).
+  const data = ok('team', { name: 'Race (example)', role: 'Role', photoId: String(photo.id), consent: 'on' });
+  const before = { items: count(), usages: usages() };
+  getDb().prepare('DELETE FROM media WHERE id = ?').run(photo.id);
+  assert.throws(() => C.createItem('team', data, null), C.PhotoUnavailableError);
+  assert.deepEqual({ items: count(), usages: usages() }, before, 'no item and no usage rows written');
+
+  // Existing item: its stored draft is untouched.
+  const second = await uploadPhoto('Second');
+  const id = C.createItem('team', ok('team', { name: 'Race two (example)', role: 'Role' }), null);
+  const stored = () => getDb().prepare('SELECT draft_data AS d, updated_at AS u FROM content_items WHERE id = ?').get(id) as { d: string; u: string };
+  const snapshot = stored();
+  const update = ok('team', { name: 'Race two (example)', role: 'Changed role', photoId: String(second.id) });
+  getDb().prepare('DELETE FROM media WHERE id = ?').run(second.id);
+  assert.throws(() => C.saveItemDraft(id, update, null), C.PhotoUnavailableError);
+  assert.deepEqual(stored(), snapshot, 'draft and timestamp unchanged');
+  assert.equal(usages(), before.usages);
+  C.deleteItem(id, null);
+});
+
 test('tampered rows are re-validated; invalid published items are never shown', () => {
   const now = new Date().toISOString();
   const ins = getDb().prepare('INSERT INTO content_items (kind, position, draft_data, published_data, created_at, updated_at) VALUES (?, 99, ?, ?, ?, ?)');

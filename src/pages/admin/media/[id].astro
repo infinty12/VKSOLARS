@@ -100,6 +100,14 @@ const url = mediaUrl(item.uid);
             </ul>
           )
         }
+        {
+          usages.some((u) => u.usageType === 'Team member') && (
+            <p class="admin-hint mdd-alt-note" data-team-alt-note>
+              Team profiles use a copy of this image’s alt text saved with each profile. After changing the alt text here, open the team member in Site
+              content, save the draft and publish it to update the website.
+            </p>
+          )
+        }
       </section>
 
       <section class="admin-card mdd-danger" aria-labelledby="mdd-delete-title">

@@ -8,13 +8,15 @@
  *   with the item but never included in what public pages receive (see the to*Public functions).
  * - Publishing requires the verification/approval/consent fields; nothing is ever pre-filled.
  * - Team photos come from the media library; every draft/published reference is recorded in
- *   media_usages, so an image in use cannot be deleted.
+ *   media_usages, so an image in use cannot be deleted. The photo's alt text is copied into the
+ *   draft when it is saved (photoAlt), so a later alt-text edit in Media reaches the website only
+ *   after the item is saved and published again.
  * - Public pages use published items only. Only if the database cannot be read do they fall back
  *   to the lists in src/config/site.ts. An empty published list stays empty.
  */
 import { getDb, nowIso, transaction } from './db.ts';
 import { audit } from './audit.ts';
-import { getMedia, mediaUrl, thumbSize } from './media.ts';
+import { getMedia, mediaUrl, thumbSize, MEDIA } from './media.ts';
 import { oneLine, multiLine } from './site-content.ts';
 import { site } from '../../config/site.ts';
 
@@ -163,7 +165,7 @@ function readData(kind: Kind, json: string | null): ItemData | null {
   for (const f of FIELDS[kind]) fields[f.name] = typeof raw[f.name] === 'number' ? String(raw[f.name]) : raw[f.name];
   for (let i = 0; i < 3; i++) {
     const r = validateItem(kind, fields);
-    if (r.ok) return r.value;
+    if (r.ok) return kind === 'team' ? withStoredPhotoAlt(r.value, raw.photoAlt) : r.value;
     let cleared = false;
     for (const [name] of Object.entries(r.errors)) {
       const spec = FIELDS[kind].find((f) => f.name === name)!;
@@ -176,10 +178,22 @@ function readData(kind: Kind, json: string | null): ItemData | null {
   return null;
 }
 
+/**
+ * The photo alt text saved with a team member (not a form field). Kept only when there is a
+ * photo; null means "not recorded" (items saved before Stage 7B.1).
+ */
+function withStoredPhotoAlt(d: ItemData, stored: unknown): ItemData {
+  const alt = typeof stored === 'string' && typeof d.photoId === 'number' ? oneLine(stored).slice(0, MEDIA.altMax) : null;
+  return { ...d, photoAlt: alt };
+}
+
 const changedFields = (kind: Kind, a: ItemData | null, b: ItemData | null) => {
   const fa = toFormValues(kind, a);
   const fb = toFormValues(kind, b);
-  return FIELDS[kind].map((f) => f.name).filter((n) => fa[n] !== fb[n]);
+  const changed = FIELDS[kind].map((f) => f.name).filter((n) => fa[n] !== fb[n]);
+  // A new copy of the photo's alt text is a change too: it must be published to reach the site.
+  if (kind === 'team' && (a?.photoAlt ?? null) !== (b?.photoAlt ?? null) && !changed.includes('photoId')) changed.push('photoAlt');
+  return changed;
 };
 
 // ---------------------------------------------------------------- public shapes (no internal notes)
@@ -223,7 +237,8 @@ function toPublic(kind: Kind, d: ItemData, into: PublicContent) {
       name,
       role: str(d.role),
       bio: str(d.bio),
-      photo: media ? { src: mediaUrl(media.uid, true), ...thumbSize(media), alt: media.altText || `Portrait of ${name}` } : null,
+      // The alt text saved with the item; items saved before it was recorded use the library's current text.
+      photo: media ? { src: mediaUrl(media.uid, true), ...thumbSize(media), alt: (typeof d.photoAlt === 'string' ? d.photoAlt : media.altText) || `Portrait of ${name}` } : null,
     });
   } else {
     into.achievements.push(str(d.text));
@@ -385,8 +400,40 @@ function syncUsages(id: number) {
   if (typeof published?.photoId === 'number') add.run(published.photoId, USAGE_TYPE, keys.published, nowIso());
 }
 
-export function createItem(kind: Kind, data: ItemData, userId: number | null): number {
-  const id = transaction(() => {
+/** The chosen photo no longer exists (deleted between choosing it and saving). Nothing was saved. */
+export class PhotoUnavailableError extends Error {
+  constructor() {
+    super('The chosen image is no longer in the media library.');
+    this.name = 'PhotoUnavailableError';
+  }
+}
+
+/**
+ * Inside the save transaction: confirm the photo still exists and copy its current alt text into
+ * the draft. Throws PhotoUnavailableError (rolling the whole save back) if the image has gone.
+ */
+function prepareForSave(kind: Kind, data: ItemData): ItemData {
+  if (kind !== 'team') return data;
+  if (typeof data.photoId !== 'number') return { ...data, photoAlt: null };
+  const media = getMedia(data.photoId);
+  if (!media) throw new PhotoUnavailableError();
+  return { ...data, photoAlt: media.altText };
+}
+
+/** Run a save; a database foreign-key rejection on the photo becomes PhotoUnavailableError. */
+function guardPhoto<T>(fn: () => T): T {
+  try {
+    return transaction(fn);
+  } catch (err) {
+    if (err instanceof PhotoUnavailableError || /FOREIGN KEY constraint failed/i.test((err as Error).message)) throw new PhotoUnavailableError();
+    throw err;
+  }
+}
+
+/** Create a draft item. Throws PhotoUnavailableError (nothing saved) if its photo has just been deleted. */
+export function createItem(kind: Kind, input: ItemData, userId: number | null): number {
+  const id = guardPhoto(() => {
+    const data = prepareForSave(kind, input);
     const now = nowIso();
     const pos = (getDb().prepare('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM content_items WHERE kind = ?').get(kind) as { p: number }).p;
     const newId = Number(
@@ -401,12 +448,15 @@ export function createItem(kind: Kind, data: ItemData, userId: number | null): n
   return id;
 }
 
-export function saveItemDraft(id: number, data: ItemData, userId: number | null): boolean {
+/** Save the draft. Throws PhotoUnavailableError (nothing saved) if its photo has just been deleted. */
+export function saveItemDraft(id: number, input: ItemData, userId: number | null): boolean {
   const item = getItem(id);
   if (!item) return false;
-  transaction(() => {
-    getDb().prepare('UPDATE content_items SET draft_data = ?, updated_by = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(data), userId, nowIso(), id);
+  const data = guardPhoto(() => {
+    const prepared = prepareForSave(item.kind, input);
+    getDb().prepare('UPDATE content_items SET draft_data = ?, updated_by = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(prepared), userId, nowIso(), id);
     syncUsages(id);
+    return prepared;
   });
   audit('content.item.save', { userId, targetType: 'content_item', targetId: id, detail: { kind: item.kind, changed: changedFields(item.kind, item.draft, data) } });
   return true;
