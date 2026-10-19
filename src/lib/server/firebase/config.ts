@@ -33,7 +33,34 @@ export interface FirebaseConfig {
   authDomain: string;
   storageBucket: string;
   dataEnv: DataEnv;
-  credentials: { kind: 'service-account-file'; path: string } | { kind: 'application-default' } | { kind: 'none' };
+  credentials:
+    | { kind: 'service-account-file'; path: string }
+    | { kind: 'service-account-json'; account: ServiceAccountKey }
+    | { kind: 'application-default' }
+    | { kind: 'none' };
+}
+
+export interface ServiceAccountKey {
+  project_id: string;
+  client_email: string;
+  private_key: string;
+}
+
+/** Parse a service-account key given as raw JSON or base64 JSON. Returns null if it isn't one. */
+export function parseServiceAccount(raw: string): ServiceAccountKey | null {
+  const tryParse = (s: string) => {
+    try {
+      const v = JSON.parse(s) as Record<string, unknown>;
+      return v && typeof v === 'object' ? v : null;
+    } catch {
+      return null;
+    }
+  };
+  const obj = tryParse(raw) ?? (/^[A-Za-z0-9+/=_-]+$/.test(raw) ? tryParse(Buffer.from(raw, 'base64').toString('utf8')) : null);
+  if (!obj || obj.type !== 'service_account') return null;
+  const { project_id, client_email, private_key } = obj;
+  if (typeof project_id !== 'string' || typeof client_email !== 'string' || typeof private_key !== 'string' || !private_key.includes('PRIVATE KEY')) return null;
+  return { project_id, client_email, private_key };
 }
 
 type Env = Record<string, string | undefined>;
@@ -72,7 +99,15 @@ export function parseFirebaseConfig(env: Env, opts: { fileExists?: (p: string) =
   // Admin credentials: a service-account file OUTSIDE the project, or Application Default Credentials.
   let credentials: FirebaseConfig['credentials'] = { kind: 'none' };
   const fileRaw = (env.FIREBASE_SERVICE_ACCOUNT_FILE ?? '').trim();
-  if (fileRaw) {
+  const jsonRaw = (env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '').trim();
+  if (jsonRaw) {
+    // Hosting platforms without a file system (e.g. Vercel): the key JSON in a SECRET variable,
+    // raw or base64-encoded. Only its shape is checked; the value is never reported.
+    const account = parseServiceAccount(jsonRaw);
+    if (!account) problems.push('FIREBASE_SERVICE_ACCOUNT_JSON is not a valid service-account key.');
+    else if (projectId && account.project_id !== projectId) problems.push('FIREBASE_SERVICE_ACCOUNT_JSON belongs to a different project.');
+    else credentials = { kind: 'service-account-json', account };
+  } else if (fileRaw) {
     const path = resolve(fileRaw);
     const rel = relative(projectRoot, path);
     const insideProject = rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
@@ -83,7 +118,7 @@ export function parseFirebaseConfig(env: Env, opts: { fileExists?: (p: string) =
   } else if (bool(env.FIREBASE_USE_APPLICATION_DEFAULT_CREDENTIALS)) {
     credentials = { kind: 'application-default' };
   } else {
-    problems.push('No Admin credentials: set FIREBASE_SERVICE_ACCOUNT_FILE or FIREBASE_USE_APPLICATION_DEFAULT_CREDENTIALS=true.');
+    problems.push('No Admin credentials: set FIREBASE_SERVICE_ACCOUNT_FILE, FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_USE_APPLICATION_DEFAULT_CREDENTIALS=true.');
   }
 
   // Never mix Admin credentials into public (browser-visible) variables.

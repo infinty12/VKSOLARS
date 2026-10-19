@@ -37,6 +37,9 @@ logs/
 *-firebase-adminsdk-*.json
 *credentials*.json
 .firebase/
+# Vercel build output and local project link
+.vercel/
+vercel.env
 firebase-debug.log
 firebase-debug.*.log
 firestore-debug.log

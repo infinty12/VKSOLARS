@@ -21,7 +21,13 @@ async function initApp(config: FirebaseConfig): Promise<AdminApp> {
   const { initializeApp, getApps, cert, applicationDefault } = await import('firebase-admin/app');
   const existing = getApps().find((a) => a.name === 'vk-solar');
   if (existing) return existing;
-  const credential = config.credentials.kind === 'service-account-file' ? cert(config.credentials.path) : applicationDefault();
+  const c = config.credentials;
+  const credential =
+    c.kind === 'service-account-file'
+      ? cert(c.path)
+      : c.kind === 'service-account-json'
+        ? cert({ projectId: c.account.project_id, clientEmail: c.account.client_email, privateKey: c.account.private_key })
+        : applicationDefault();
   return initializeApp(
     { credential, projectId: config.projectId, ...(config.storageBucket ? { storageBucket: config.storageBucket } : {}) },
     'vk-solar',

@@ -50,6 +50,23 @@ test('invalid identifiers are reported without echoing the values', () => {
   assert.ok(!c.problems.join(' ').includes('Bad_ID!'));
 });
 
+test('a service-account key in a secret variable (raw or base64) is accepted for hosting without files', () => {
+  // Fictitious key material, right shape only.
+  const key = { type: 'service_account', project_id: 'example-project-1', client_email: 'x@example-project-1.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n' };
+  const env = { ...base, FIREBASE_SERVICE_ACCOUNT_FILE: '' };
+  for (const value of [JSON.stringify(key), Buffer.from(JSON.stringify(key)).toString('base64')]) {
+    const c = parse({ ...env, FIREBASE_SERVICE_ACCOUNT_JSON: value });
+    assert.equal(c.status, 'ready', JSON.stringify(c.problems));
+    assert.equal(c.credentials.kind, 'service-account-json');
+  }
+  const wrongProject = parse({ ...env, FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({ ...key, project_id: 'other-project-9' }) });
+  assert.match(wrongProject.problems.join(' '), /different project/);
+  const junk = parse({ ...env, FIREBASE_SERVICE_ACCOUNT_JSON: 'SECRET-LOOKING-JUNK' });
+  assert.match(junk.problems.join(' '), /not a valid service-account key/);
+  assert.ok(!junk.problems.join(' ').includes('SECRET-LOOKING-JUNK'), 'value never echoed');
+  assert.ok(!JSON.stringify(publicFirebaseStatus(parse({ ...env, FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify(key) }))).includes('PRIVATE KEY'), 'never shown');
+});
+
 test('Admin credentials are refused in PUBLIC_ (browser-visible) variables', () => {
   const c = parse({ ...base, PUBLIC_FIREBASE_SERVICE_ACCOUNT: '{}', PUBLIC_FIREBASE_PROJECT_ID: 'ok' });
   assert.equal(c.status, 'misconfigured');
