@@ -54,6 +54,7 @@ export const FLASH = {
   itemMoved: { kind: 'success', text: 'Order updated. The website uses the new order.' },
   passwordChanged: { kind: 'success', text: 'Password changed. You are still signed in here; all other sessions were signed out.' },
   sessionsRevoked: { kind: 'success', text: 'All your other sessions were signed out.' },
+  localOnly: { kind: 'info', text: 'That section is only available on the admin running on the office computer for now.' },
   notfound: { kind: 'error', text: 'That item no longer exists.' },
 } as const satisfies Record<string, { kind: 'success' | 'error' | 'info'; text: string }>;
 

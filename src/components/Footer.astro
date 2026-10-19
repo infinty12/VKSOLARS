@@ -110,7 +110,10 @@ const socialLabels: Record<string, string> = {
     </div>
 
     <div class="site-footer__bottom">
-      <p>&copy; {year} {site.name}. All rights reserved. <a href="/privacy">Privacy Notice</a></p>
+      <p>
+        &copy; {year} {site.name}. All rights reserved. <a href="/privacy">Privacy Notice</a>
+        <a href="/admin" class="site-footer__admin" rel="nofollow"><Icon name="shield" size={16} /><span>Admin</span></a>
+      </p>
       {
         socialLinks.length > 0 && (
           <ul role="list" class="site-footer__social">
@@ -199,6 +202,19 @@ const socialLabels: Record<string, string> = {
   .site-footer a:hover {
     color: var(--white);
     text-decoration: underline;
+  }
+
+  .site-footer__admin {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 24px;
+    margin-left: var(--space-2);
+    opacity: 0.85;
+  }
+
+  .site-footer__admin:hover {
+    opacity: 1;
   }
 
   .site-footer__lines {

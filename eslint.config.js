@@ -10,6 +10,7 @@ export default [
       '.claude/',
       'playwright-report/',
       'test-results/',
+      '.vercel/',
       '.snapshot/',
       'storage/',
       'test-storage/',

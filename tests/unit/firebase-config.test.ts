@@ -100,7 +100,13 @@ test('security rules deny every client request', () => {
   }
 });
 
-test('the website itself does not import Firebase (it stays optional)', () => {
-  const site = ['src/middleware.ts', 'src/layouts/BaseLayout.astro', 'src/layouts/AdminLayout.astro', 'src/pages/index.astro', 'src/pages/contact.astro'];
-  for (const f of site) assert.doesNotMatch(readFileSync(f, 'utf8'), /firebase/i, f);
+test('Firebase stays optional and server-only: the SDK is only ever loaded lazily, never by pages or browser code', () => {
+  // Public pages and layouts never mention Firebase at all.
+  for (const f of ['src/layouts/BaseLayout.astro', 'src/pages/index.astro', 'src/pages/contact.astro']) assert.doesNotMatch(readFileSync(f, 'utf8'), /firebase/i, f);
+  // No file statically imports the SDK; firebase/admin.ts loads it with import() only when configured.
+  for (const f of ['src/middleware.ts', 'src/layouts/AdminLayout.astro', 'src/lib/server/admin-firebase.ts', 'src/lib/server/customers.ts', 'src/lib/server/firebase/admin.ts']) {
+    assert.doesNotMatch(readFileSync(f, 'utf8'), /^\s*import\s[^;]*from\s+'firebase(-admin)?(\/[a-z-]+)?'/m, f);
+  }
+  // Browser code never uses the client SDK.
+  assert.doesNotMatch(readFileSync('src/components/Footer.astro', 'utf8'), /from 'firebase/);
 });

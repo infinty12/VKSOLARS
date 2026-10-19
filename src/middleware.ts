@@ -13,6 +13,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { config, SESSION } from './lib/server/config.ts';
 import { readSession } from './lib/server/auth.ts';
+import { adminAuthMode, readFirebaseAdminSession, isFirebaseAdminPath } from './lib/server/admin-firebase.ts';
 import { safeEqual } from './lib/server/secret.ts';
 import { ensureOutboxWorker, kickOutbox } from './lib/server/notifications.ts';
 import { MEDIA } from './lib/server/media.ts';
@@ -65,8 +66,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
   if (!config.adminAllowRemote && !isLoopback(client)) return notFound();
 
-  // 2. Authentication.
-  const session = readSession(context.cookies.get(SESSION.cookieName)?.value);
+  // 2. Authentication: local SQLite sign-in, or Firebase sign-in for the hosted site (ADMIN_AUTH=firebase).
+  const mode = adminAuthMode();
+  const cookie = context.cookies.get(SESSION.cookieName)?.value;
+  const session = mode === 'local' ? readSession(cookie) : mode === 'firebase' ? await readFirebaseAdminSession(cookie) : null;
   if (session) context.locals.admin = { user: session.user, csrfToken: session.csrfToken };
 
   const isApi = path.startsWith('/api/admin/');
@@ -74,6 +77,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (isApi) return Response.json({ error: 'Authentication required.' }, { status: 401 });
     const nextUrl = encodeURIComponent(path + context.url.search);
     return context.redirect(`/admin/login?next=${nextUrl}`, 303);
+  }
+
+  // On Firebase, only the sections that store their data in Firebase are available; the others
+  // still use this computer's local storage and stay on the local admin until they are migrated.
+  if (mode !== 'local' && session && !isFirebaseAdminPath(path)) {
+    if (isApi) return Response.json({ error: 'Not available on the hosted admin yet.' }, { status: 404 });
+    return context.redirect(path === '/admin' || path === '/admin/' ? '/admin/requests' : '/admin/requests?msg=localOnly', 303);
   }
 
   // 3. CSRF for state-changing requests (login has its own double-submit check).

@@ -12,7 +12,8 @@ export function audit(
     .prepare('INSERT INTO audit_log (at, user_id, action, target_type, target_id, detail) VALUES (?, ?, ?, ?, ?, ?)')
     .run(
       nowIso(),
-      opts.userId ?? null,
+      // Hosted (Firebase) admins have no local account id: stored as no user.
+      opts.userId && opts.userId > 0 ? opts.userId : null,
       action,
       opts.targetType ?? null,
       opts.targetId === undefined ? null : String(opts.targetId),

@@ -4,6 +4,7 @@ import '../styles/global.css';
 import Icon from '../components/Icon.astro';
 import Csrf from '../components/admin/Csrf.astro';
 import type { IconName } from '../components/icons';
+import { adminAuthMode, isFirebaseAdminPath } from '../lib/server/admin-firebase.ts';
 
 interface Props {
   title: string;
@@ -17,7 +18,7 @@ const { title, crumbs = [], flash = null } = Astro.props;
 const user = Astro.locals.admin?.user;
 const path = Astro.url.pathname.replace(/\/$/, '') || '/admin';
 
-const nav: { label: string; href: string; icon: IconName }[] = [
+const allNav: { label: string; href: string; icon: IconName }[] = [
   { label: 'Dashboard', href: '/admin', icon: 'gauge' },
   { label: 'Service Areas', href: '/admin/service-areas', icon: 'mapPin' },
   { label: 'Enquiries', href: '/admin/enquiries', icon: 'mail' },
@@ -30,6 +31,8 @@ const nav: { label: string; href: string; icon: IconName }[] = [
   { label: 'Activity', href: '/admin/activity', icon: 'activity' },
   { label: 'Account', href: '/admin/account', icon: 'users' },
 ];
+// The hosted (Firebase) admin shows only the sections that already store their data in Firebase.
+const nav = adminAuthMode() === 'local' ? allNav : allNav.filter((item) => isFirebaseAdminPath(item.href));
 const isActive = (href: string) => (href === '/admin' ? path === '/admin' : path === href || path.startsWith(`${href}/`));
 ---
 

@@ -30,7 +30,8 @@
     "backup": "node --env-file-if-exists=.env scripts/backup.mjs",
     "backup:list": "node --env-file-if-exists=.env scripts/backup-list.mjs",
     "restore": "node --env-file-if-exists=.env scripts/restore.mjs",
-    "firebase:check": "node --env-file-if-exists=.env scripts/firebase-check.mjs"
+    "firebase:check": "node --env-file-if-exists=.env scripts/firebase-check.mjs",
+    "admin:grant": "node --env-file-if-exists=.env scripts/admin-grant.mjs"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.8",

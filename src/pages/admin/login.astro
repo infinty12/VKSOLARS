@@ -15,17 +15,20 @@ import {
 import { audit } from '../../lib/server/audit.ts';
 import { safeEqual } from '../../lib/server/secret.ts';
 import { clientIp, safeAdminRedirect, setStrictCookie } from '../../lib/server/http.ts';
+import { adminAuthMode, firebaseAdminSignIn } from '../../lib/server/admin-firebase.ts';
 
 if (Astro.locals.admin) return Astro.redirect('/admin', 303);
 
 const next = safeAdminRedirect(Astro.url.searchParams.get('next'));
 let error: string | null = null;
 let username = '';
-const noAdmin = adminCount() === 0;
+// Hosted site: Firebase admin accounts (email). Local: the SQLite account from npm run admin:create.
+const mode = adminAuthMode();
+const noAdmin = mode === 'local' && adminCount() === 0;
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
-  username = String(form.get('username') ?? '').trim().slice(0, 40);
+  username = String(form.get('username') ?? '').trim().slice(0, mode === 'local' ? 40 : 254);
   const password = String(form.get('password') ?? '').slice(0, 256);
   const formToken = String(form.get('_csrf') ?? '');
   const cookieToken = Astro.cookies.get(SESSION.loginCsrfCookie)?.value ?? '';
@@ -34,6 +37,25 @@ if (Astro.request.method === 'POST') {
 
   if (!cookieToken || !safeEqual(formToken, cookieToken)) {
     error = 'Your session expired. Please try again.';
+  } else if (mode === 'firebase-unavailable') {
+    error = 'Sign-in is not available: the server is not connected to Firebase.';
+  } else if (mode === 'firebase') {
+    const r = username && password ? await firebaseAdminSignIn(username, password, ip, Astro.request.headers.get('user-agent')) : ({ ok: false, reason: 'invalid' } as const);
+    if (r.ok) {
+      setStrictCookie(Astro.cookies, Astro.url, SESSION.cookieName, r.token, { maxAgeSec: Math.floor(SESSION.absoluteMs / 1000) });
+      Astro.cookies.delete(SESSION.loginCsrfCookie, { path: '/admin' });
+      audit('login.success', { detail: { method: 'firebase' } });
+      return Astro.redirect(next === '/admin' ? '/admin/requests' : next, 303);
+    }
+    if (r.reason === 'locked') {
+      error = `Too many failed sign-in attempts. Try again in ${Math.round(LOGIN_LIMIT.lockMs / 60000)} minutes.`;
+      audit('login.blocked', { detail: { reason: 'rate_limited' } });
+    } else if (r.reason === 'unavailable') {
+      error = 'Sign-in is temporarily unavailable. Please try again shortly.';
+    } else {
+      audit('login.failure', { detail: { reason: 'bad_credentials' } });
+      error = 'Incorrect email or password.';
+    }
   } else if (loginLockedUntil(keys)) {
     error = `Too many failed sign-in attempts. Try again in ${Math.round(LOGIN_LIMIT.lockMs / 60000)} minutes.`;
     audit('login.blocked', { detail: { reason: 'rate_limited' } });
@@ -96,8 +118,8 @@ setStrictCookie(Astro.cookies, Astro.url, SESSION.loginCsrfCookie, loginToken, {
         <form method="post" class="login__form">
           <input type="hidden" name="_csrf" value={loginToken} />
           <div class="login__field">
-            <label for="username">Username</label>
-            <input id="username" name="username" type="text" autocomplete="username" required maxlength="40" value={username} />
+            <label for="username">{mode === 'local' ? 'Username' : 'Email'}</label>
+            <input id="username" name="username" type={mode === 'local' ? 'text' : 'email'} autocomplete="username" required maxlength={mode === 'local' ? 40 : 254} value={username} />
           </div>
           <div class="login__field">
             <label for="password">Password</label>
