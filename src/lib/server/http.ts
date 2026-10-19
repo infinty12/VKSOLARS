@@ -46,6 +46,12 @@ export const FLASH = {
   contentDiscarded: { kind: 'success', text: 'Draft discarded. The website is unchanged.' },
   contentRestored: { kind: 'success', text: 'Revision restored as a new draft. Publish it to make it live.' },
   noDraft: { kind: 'info', text: 'There is no draft at the moment.' },
+  itemSaved: { kind: 'success', text: 'Draft saved. It is not on the website until you publish it.' },
+  itemPublished: { kind: 'success', text: 'Published. It now appears on the website.' },
+  itemUnpublished: { kind: 'success', text: 'Unpublished. It no longer appears on the website.' },
+  itemDiscarded: { kind: 'success', text: 'Unpublished edits discarded. The draft matches the published version again.' },
+  itemIsPublished: { kind: 'error', text: 'Unpublish this item before deleting it.' },
+  itemMoved: { kind: 'success', text: 'Order updated. The website uses the new order.' },
   notfound: { kind: 'error', text: 'That item no longer exists.' },
 } as const satisfies Record<string, { kind: 'success' | 'error' | 'info'; text: string }>;
 

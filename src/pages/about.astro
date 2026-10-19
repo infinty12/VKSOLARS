@@ -5,6 +5,7 @@ import PageHero from '../components/PageHero.astro';
 import SectionHeading from '../components/SectionHeading.astro';
 import Icon from '../components/Icon.astro';
 import StatsBand from '../components/StatsBand.astro';
+import TeamSection from '../components/TeamSection.astro';
 import CTASection from '../components/CTASection.astro';
 import { site } from '../config/site';
 import { services } from '../data/services';
@@ -42,8 +43,6 @@ const reasons: { title: string; text: string; icon: IconName }[] = [
   },
 ];
 
-const hasTeam = site.team.length > 0;
-const hasAchievements = site.achievements.length > 0;
 ---
 
 <SiteLayout
@@ -123,59 +122,8 @@ const hasAchievements = site.achievements.length > 0;
     </div>
   </section>
 
-  <!-- Team & credentials -->
-  <section class="section section--alt" aria-labelledby="team-title">
-    <div class="container">
-      <SectionHeading eyebrow="Our team" title="The people behind the work" id="team-title" />
-      {
-        hasTeam ? (
-          <ul role="list" class="team">
-            {site.team.map((m) => (
-              <li class="member">
-                {m.photo ? (
-                  <img src={m.photo} alt={`Portrait of ${m.name}`} width="320" height="320" loading="lazy" decoding="async" />
-                ) : (
-                  <span class="member__avatar" aria-hidden="true">
-                    {m.name
-                      .split(' ')
-                      .map((n) => n[0])
-                      .join('')
-                      .slice(0, 2)}
-                  </span>
-                )}
-                <h3>{m.name}</h3>
-                <p class="member__role">{m.role}</p>
-                {m.bio && <p class="member__bio">{m.bio}</p>}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div class="placeholder-note" data-placeholder="team">
-            <Icon name="users" size={22} />
-            <p>
-              <strong>Team profiles coming soon.</strong> We’re preparing introductions to the people who carry out and manage
-              our work.
-            </p>
-          </div>
-        )
-      }
-      {
-        hasAchievements && (
-          <div class="achievements">
-            <h3>Credentials and achievements</h3>
-            <ul role="list">
-              {site.achievements.map((a) => (
-                <li>
-                  <Icon name="checkCircle" size={18} />
-                  {a}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )
-      }
-    </div>
-  </section>
+  <!-- Team & credentials (published items only) -->
+  <TeamSection />
 
   <StatsBand />
 
@@ -277,76 +225,6 @@ const hasAchievements = site.achievements.length > 0;
   .value p {
     color: var(--text-secondary);
     font-size: var(--fs-sm);
-  }
-
-  .team {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
-    gap: var(--space-3);
-  }
-
-  .member img,
-  .member__avatar {
-    width: 100%;
-    aspect-ratio: 1;
-    object-fit: cover;
-    border-radius: var(--radius-lg);
-    margin-bottom: var(--space-1-5);
-  }
-
-  .member__avatar {
-    display: grid;
-    place-items: center;
-    background: var(--gradient-hero);
-    color: var(--sky-200);
-    font-family: var(--font-heading);
-    font-size: 2.5rem;
-    font-weight: 600;
-  }
-
-  .member h3 {
-    font-size: var(--fs-h4);
-  }
-
-  .member__role {
-    color: var(--color-accent-text);
-    font-size: var(--fs-sm);
-    font-weight: var(--fw-semibold);
-  }
-
-  .member__bio {
-    margin-top: var(--space-1);
-    color: var(--text-secondary);
-    font-size: var(--fs-sm);
-  }
-
-  .placeholder-note :global(.icon) {
-    margin-top: 2px;
-    color: var(--blue-500);
-  }
-
-  .achievements {
-    margin-top: var(--space-5);
-  }
-
-  .achievements h3 {
-    font-size: var(--fs-h4);
-    margin-bottom: var(--space-1-5);
-  }
-
-  .achievements ul {
-    display: grid;
-    gap: var(--space-1);
-  }
-
-  .achievements li {
-    display: flex;
-    gap: var(--space-1);
-    align-items: center;
-  }
-
-  .achievements :global(.icon) {
-    color: var(--color-success);
   }
 
   .reasons {

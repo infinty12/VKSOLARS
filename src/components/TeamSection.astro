@@ -1,0 +1,146 @@
+---
+// About page "Our team" section: published team members and achievements only (or the draft
+// versions on the admin content preview). Moved from about.astro unchanged apart from the data
+// source; bios keep their line breaks via CSS. All text is escaped plain text.
+import SectionHeading from './SectionHeading.astro';
+import Icon from './Icon.astro';
+import { contentFor } from '../lib/server/content-items.ts';
+
+const { team, achievements } = contentFor(Astro.locals);
+---
+
+<section class="section section--alt" aria-labelledby="team-title">
+  <div class="container">
+    <SectionHeading eyebrow="Our team" title="The people behind the work" id="team-title" />
+    {
+      team.length > 0 ? (
+        <ul role="list" class="team">
+          {team.map((m) => (
+            <li class="member">
+              {m.photo ? (
+                <img src={m.photo.src} alt={m.photo.alt} width={m.photo.width} height={m.photo.height} loading="lazy" decoding="async" />
+              ) : (
+                <span class="member__avatar" aria-hidden="true">
+                  {m.name
+                    .split(' ')
+                    .map((n) => n[0])
+                    .join('')
+                    .slice(0, 2)}
+                </span>
+              )}
+              <h3>{m.name}</h3>
+              <p class="member__role">{m.role}</p>
+              {m.bio && <p class="member__bio">{m.bio}</p>}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div class="placeholder-note" data-placeholder="team">
+          <Icon name="users" size={22} />
+          <p>
+            <strong>Team profiles coming soon.</strong> We’re preparing introductions to the people who carry out and manage our work.
+          </p>
+        </div>
+      )
+    }
+    {
+      achievements.length > 0 && (
+        <div class="achievements">
+          <h3>Credentials and achievements</h3>
+          <ul role="list">
+            {achievements.map((a) => (
+              <li>
+                <Icon name="checkCircle" size={18} />
+                <span>{a}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )
+    }
+  </div>
+</section>
+
+<style>
+  .team {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+    gap: var(--space-3);
+  }
+
+  .member {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .member img,
+  .member__avatar {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-1-5);
+  }
+
+  .member__avatar {
+    display: grid;
+    place-items: center;
+    background: var(--gradient-hero);
+    color: var(--sky-200);
+    font-family: var(--font-heading);
+    font-size: 2.5rem;
+    font-weight: 600;
+  }
+
+  .member h3 {
+    font-size: var(--fs-h4);
+  }
+
+  .member__role {
+    color: var(--color-accent-text);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+  }
+
+  .member__bio {
+    margin-top: var(--space-1);
+    color: var(--text-secondary);
+    font-size: var(--fs-sm);
+    white-space: pre-line;
+  }
+
+  .placeholder-note :global(.icon) {
+    margin-top: 2px;
+    color: var(--blue-500);
+  }
+
+  .achievements {
+    margin-top: var(--space-5);
+  }
+
+  .achievements h3 {
+    font-size: var(--fs-h4);
+    margin-bottom: var(--space-1-5);
+  }
+
+  .achievements ul {
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .achievements li {
+    display: flex;
+    gap: var(--space-1);
+    align-items: center;
+    overflow-wrap: anywhere;
+  }
+
+  .achievements li > span {
+    min-width: 0;
+  }
+
+  .achievements :global(.icon) {
+    flex-shrink: 0;
+    color: var(--color-success);
+  }
+</style>

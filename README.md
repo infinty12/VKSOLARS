@@ -261,9 +261,7 @@ business details in **Admin → Business details**, the published version is sho
 | `contact.whatsapp` | Floating WhatsApp button, footer, contact page |
 | `contact.email`, `address`, `hours` | Footer and contact page; `address` also upgrades JSON-LD to `LocalBusiness` |
 | `social.*` | Footer social links |
-| `stats` | Home and About statistics band (hidden while empty) |
-| `testimonials` | Home testimonials (hidden while empty; each must have `approved: true`) |
-| `team`, `achievements` | About page (a clearly marked “coming soon” note shows while `team` is empty) |
+| `stats`, `testimonials`, `team`, `achievements` | **Fallback only** — used only if the database can't be read. Manage these in Admin → Site content (below) |
 | `founded` | JSON-LD `foundingDate` |
 
 ### Business details editor (Admin → Business details)
@@ -288,6 +286,31 @@ founding year — and nothing else (page text, services and service slugs stay i
 - Tables: `content_revisions` (immutable versions) and `content_state` (current draft and published pointers), migration 7.
   Both are included in backups.
 
+### Site content (Admin → Site content)
+
+Statistics (Home and About figures band), testimonials (Home), team members and credentials/achievements (About).
+Nothing is pre-filled: enter only real, confirmed information.
+
+- **Draft and published versions per item.** *Save draft* never changes the website. *Publish* copies the saved draft to
+  the live version; later edits stay private until published again (*Discard changes* reverts to the live version).
+  *Unpublish* removes an item from the site; only unpublished items can be deleted. *Preview all drafts*
+  (`/admin/content/preview`, admin-only, `noindex`/`no-store`) shows every item's draft with the public components.
+- **Publishing requirements** (checked on the server, never ticked automatically):
+  statistics need a **source note** and a "verified" confirmation; testimonials need an **approval record** and the
+  client's approval confirmation; team members need their **consent**; achievements need **evidence** and a "verified"
+  confirmation. Source, approval and evidence notes are internal: they are never sent to public pages.
+- **Ordering:** *Up*/*Down* on the list. Takes effect on the website immediately (order isn't private); audit-logged.
+- **Team photos** are chosen from the media library (its alt text is used, else "Portrait of {name}"). The draft and the
+  published version each record a media usage, so the image can't be deleted while either uses it; unpublishing,
+  republishing without it, or deleting the member releases it.
+- **Safe values:** plain text with length and line limits, figures as whole numbers, escaped on output with line breaks
+  kept by CSS; stored items are validated again when read and invalid published items are skipped. No reviews or ratings
+  are added to structured data.
+- **Empty stays empty:** a section with no published items is hidden (the team section shows its "coming soon" note).
+  The `site.ts` lists are used only if the database can't be read.
+- **Audit log:** create, save, publish, unpublish, discard, delete and move — item id, kind and changed field names only.
+- Table: `content_items` (migration 8), included in backups.
+
 ## AI drone dashboard
 
 The dashboard on `/ai-drone-inspection` is a **demonstration** using invented numbers from
@@ -301,8 +324,8 @@ API or telemetry feed.
 | Phone, WhatsApp, email, office address, hours, social links | **Not provided** — hidden; publish them in Admin → Business details |
 | Live domain | **Not provided** — canonical/sitemap disabled |
 | Confirmed service locations | **Not provided** — add them in Admin → Service Areas |
-| Company statistics, testimonials | **Not provided** — sections hidden |
-| Team profiles, certifications, founding year | **Not provided** — About shows a “coming soon” note |
+| Company statistics, testimonials | **Not provided** — sections hidden; add verified items in Admin → Site content |
+| Team profiles, certifications, founding year | **Not provided** — About shows a “coming soon” note; add them in Admin → Site content / Business details |
 | Logo, photography | Placeholder logo and SVG illustrations — replace with official assets |
 | About page mission, vision and values; service descriptions | **Draft copy** — needs VK Solar’s approval |
 | Home, About and Services pages still mention Rajasthan | Review wording now that coverage is India-wide |

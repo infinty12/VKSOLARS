@@ -1,0 +1,369 @@
+---
+// Add or edit one content item: save draft, publish (only when its verification/approval/
+// consent requirements are met), unpublish, discard unpublished changes, delete (unpublished only).
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Csrf from '../../../../components/admin/Csrf.astro';
+import {
+  FIELDS,
+  KIND_LABELS,
+  createItem,
+  deleteItem,
+  discardItemChanges,
+  getItem,
+  isKind,
+  itemSummary,
+  mediaOptions,
+  publishItem,
+  saveItemDraft,
+  toFormValues,
+  unpublishItem,
+  validateItem,
+  type FormValues,
+} from '../../../../lib/server/content-items.ts';
+import { getMedia, mediaUrl, thumbSize } from '../../../../lib/server/media.ts';
+import { flashFrom } from '../../../../lib/server/http.ts';
+
+const kind = Astro.params.kind;
+if (!isKind(kind)) return Astro.redirect('/admin/content?msg=notfound', 303);
+const isNew = Astro.params.id === 'new';
+const id = isNew ? 0 : Number(Astro.params.id);
+let item = isNew ? null : getItem(id);
+if (!isNew && (!item || item.kind !== kind)) return Astro.redirect('/admin/content?msg=notfound', 303);
+
+const userId = Astro.locals.admin!.user.id;
+const label = KIND_LABELS[kind];
+let values: FormValues = toFormValues(kind, item?.draft ?? null);
+let errors: Record<string, string> = {};
+let actionError: string | null = null;
+let problems: string[] = [];
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('_action') ?? '');
+  if (action === 'save') {
+    const submitted: FormValues = {};
+    for (const f of FIELDS[kind]) submitted[f.name] = String(form.get(f.name) ?? '').slice(0, 2000);
+    const r = validateItem(kind, submitted);
+    if (r.ok) {
+      const savedId = isNew ? createItem(kind, r.value, userId) : (saveItemDraft(id, r.value, userId), id);
+      return Astro.redirect(`/admin/content/${kind}/${savedId}?msg=itemSaved`, 303);
+    }
+    values = submitted;
+    errors = r.errors;
+    actionError = 'The draft was not saved. Correct the highlighted fields.';
+  } else if (!isNew && action === 'publish') {
+    const r = publishItem(id, userId);
+    if (r.ok) return Astro.redirect(`/admin/content/${kind}/${id}?msg=itemPublished`, 303);
+    problems = r.problems ?? [];
+    actionError = 'Not published yet — complete the steps listed below, save the draft, then publish.';
+  } else if (!isNew && action === 'unpublish') {
+    unpublishItem(id, userId);
+    return Astro.redirect(`/admin/content/${kind}/${id}?msg=itemUnpublished`, 303);
+  } else if (!isNew && action === 'discard') {
+    discardItemChanges(id, userId);
+    return Astro.redirect(`/admin/content/${kind}/${id}?msg=itemDiscarded`, 303);
+  } else if (!isNew && action === 'delete') {
+    const r = deleteItem(id, userId);
+    if (r.ok) return Astro.redirect('/admin/content?msg=deleted', 303);
+    return Astro.redirect(`/admin/content/${kind}/${id}?msg=${r.reason === 'published' ? 'itemIsPublished' : 'notfound'}`, 303);
+  } else {
+    actionError = 'Unknown action.';
+  }
+  Astro.response.status = 422;
+  if (!isNew) item = getItem(id);
+}
+
+const summary = item ? itemSummary(kind, item.draft) : '';
+const title = isNew ? `Add ${label.one.toLowerCase()}` : `${label.one}: ${summary}`;
+const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+const flash = actionError ? { kind: 'error' as const, text: actionError } : flashFrom(Astro.url);
+const pending = problems.length ? problems : (item?.problems ?? []);
+const media = FIELDS[kind].some((f) => f.type === 'media') ? mediaOptions() : [];
+const selectedPhoto = values.photoId ? getMedia(Number(values.photoId)) : null;
+const describedBy = (name: string, hint?: string) => [hint ? `h-${name}` : '', errors[name] ? `err-${name}` : ''].filter(Boolean).join(' ') || undefined;
+---
+
+<AdminLayout title={title} crumbs={[{ label: 'Site content', href: '/admin/content' }, { label: isNew ? 'Add' : label.one }]} flash={flash}>
+  {
+    item && (
+      <section class="admin-card" aria-labelledby="ci-status-title">
+        <h2 id="ci-status-title">Status</h2>
+        <p class="ci-status">
+          {item.status === 'draft' && <span class="admin-badge admin-badge--off">Draft — not on the website</span>}
+          {item.status === 'published' && <span class="admin-badge admin-badge--on">Published</span>}
+          {item.status === 'changed' && <span class="admin-badge admin-badge--new">Published — your latest edits are not public yet</span>}
+          {item.publishedAt && (
+            <span class="ci-muted">
+              Published {fmt(item.publishedAt)}
+              {item.publishedBy ? ` by ${item.publishedBy}` : ''}
+            </span>
+          )}
+        </p>
+        {item.status !== 'published' &&
+          (pending.length > 0 ? (
+            <div class="ci-todo" role={problems.length ? 'alert' : undefined}>
+              <p>
+                <strong>Before this can be published:</strong>
+              </p>
+              <ul>
+                {pending.map((p) => (
+                  <li>{p}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p class="ci-ready">Ready to publish.</p>
+          ))}
+        <div class="ci-actions">
+          {item.status !== 'published' && (
+            <form method="post" data-confirm="Publish this item? It will appear on the public website immediately.">
+              <Csrf />
+              <input type="hidden" name="_action" value="publish" />
+              <button type="submit" class="admin-btn admin-btn--primary" disabled={pending.length > 0} aria-describedby="ci-publish-hint">
+                {item.status === 'changed' ? 'Publish changes' : 'Publish'}
+              </button>
+            </form>
+          )}
+          {item.status === 'changed' && (
+            <form method="post" data-confirm="Discard your unpublished edits and go back to the published version?">
+              <Csrf />
+              <input type="hidden" name="_action" value="discard" />
+              <button type="submit" class="admin-btn admin-btn--secondary">
+                Discard changes
+              </button>
+            </form>
+          )}
+          {item.status !== 'draft' && (
+            <form method="post" data-confirm="Unpublish this item? It will be removed from the public website immediately.">
+              <Csrf />
+              <input type="hidden" name="_action" value="unpublish" />
+              <button type="submit" class="admin-btn admin-btn--secondary">
+                Unpublish
+              </button>
+            </form>
+          )}
+          <a href="/admin/content/preview" class="admin-btn admin-btn--secondary">
+            Preview drafts
+          </a>
+        </div>
+        <p class="admin-hint" id="ci-publish-hint">
+          Publishing uses the last saved draft. Save your edits first.
+        </p>
+      </section>
+    )
+  }
+
+  <section class="admin-card" aria-labelledby="ci-edit-title">
+    <h2 id="ci-edit-title">{isNew ? 'Details' : 'Edit draft'}</h2>
+    <p class="admin-hint">
+      Saving never changes the website — {item && item.status !== 'draft' ? 'publish again to make your edits live' : 'publish to make it live'}. Plain
+      text only. Enter only real, confirmed information.
+    </p>
+    {
+      Object.keys(errors).length > 0 && (
+        <div class="ci-error-summary" role="alert" tabindex="-1" data-error-summary>
+          <p>
+            <strong>Please correct {Object.keys(errors).length === 1 ? 'this field' : 'these fields'}:</strong>
+          </p>
+          <ul>
+            {Object.entries(errors).map(([name, msg]) => (
+              <li>
+                <a href={`#f-${name}`}>
+                  {FIELDS[kind].find((f) => f.name === name)?.label}: {msg}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )
+    }
+    <form method="post" class="ci-form" novalidate data-unsaved-warning>
+      <Csrf />
+      <input type="hidden" name="_action" value="save" />
+      {
+        FIELDS[kind].map((f) =>
+          f.type === 'checkbox' ? (
+            <div class="admin-field">
+              <label class="admin-check" for={`f-${f.name}`}>
+                <input id={`f-${f.name}`} name={f.name} type="checkbox" checked={values[f.name] === 'on'} />
+                <span>{f.label}</span>
+              </label>
+            </div>
+          ) : (
+            <div class="admin-field">
+              <label for={`f-${f.name}`}>
+                {f.label}
+                {f.required && <span class="ci-muted"> (required)</span>}
+                {f.internal && <span class="admin-badge admin-badge--off ci-internal">Internal — never shown</span>}
+              </label>
+              {f.type === 'multiline' ? (
+                <textarea
+                  id={`f-${f.name}`}
+                  name={f.name}
+                  rows={f.lines ?? 3}
+                  maxlength={f.max}
+                  aria-invalid={errors[f.name] ? 'true' : undefined}
+                  aria-describedby={describedBy(f.name, f.hint)}
+                >{values[f.name]}</textarea>
+              ) : f.type === 'media' ? (
+                <select id={`f-${f.name}`} name={f.name} aria-invalid={errors[f.name] ? 'true' : undefined} aria-describedby={describedBy(f.name, f.hint)}>
+                  <option value="">No photo (initials are shown)</option>
+                  {media.map((m) => (
+                    <option value={String(m.id)} selected={values[f.name] === String(m.id)}>
+                      {(m.originalName || `Image ${m.uid.slice(0, 8)}`) + (m.altText ? ` — ${m.altText}` : ' — no alt text')}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id={`f-${f.name}`}
+                  name={f.name}
+                  type="text"
+                  inputmode={f.type === 'number' ? 'numeric' : undefined}
+                  maxlength={f.max}
+                  value={values[f.name]}
+                  spellcheck={f.type === 'number' ? 'false' : undefined}
+                  aria-invalid={errors[f.name] ? 'true' : undefined}
+                  aria-describedby={describedBy(f.name, f.hint)}
+                />
+              )}
+              {f.hint && (
+                <p class="admin-hint" id={`h-${f.name}`}>
+                  {f.hint}
+                  {f.type === 'media' && media.length === 0 && (
+                    <>
+                      {' '}
+                      No images yet — <a href="/admin/media">upload one in Media</a>.
+                    </>
+                  )}
+                </p>
+              )}
+              {f.type === 'media' && selectedPhoto && (
+                <img class="ci-photo" src={mediaUrl(selectedPhoto.uid, true)} {...thumbSize(selectedPhoto)} alt={selectedPhoto.altText} />
+              )}
+              {errors[f.name] && (
+                <p class="admin-error" id={`err-${f.name}`}>
+                  {errors[f.name]}
+                </p>
+              )}
+            </div>
+          ),
+        )
+      }
+      <button type="submit" class="admin-btn admin-btn--primary">{isNew ? 'Save draft' : 'Save draft'}</button>
+    </form>
+  </section>
+
+  {
+    item && (
+      <section class="admin-card ci-danger" aria-labelledby="ci-delete-title">
+        <h2 id="ci-delete-title">Delete</h2>
+        {item.status === 'draft' ? (
+          <p class="admin-hint" id="ci-delete-hint">
+            Permanently removes this draft. Any photo it uses is released (the image stays in the media library).
+          </p>
+        ) : (
+          <p class="admin-hint" id="ci-delete-hint">
+            This item is published. Unpublish it first, then delete it.
+          </p>
+        )}
+        <form method="post" data-confirm="Permanently delete this item? This cannot be undone.">
+          <Csrf />
+          <input type="hidden" name="_action" value="delete" />
+          <button type="submit" class="admin-btn admin-btn--danger" disabled={item.status !== 'draft'} aria-describedby="ci-delete-hint">
+            Delete
+          </button>
+        </form>
+      </section>
+    )
+  }
+</AdminLayout>
+
+<script>
+  document.querySelector<HTMLElement>('[data-error-summary]')?.focus();
+</script>
+
+<style>
+  .ci-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    margin-block: var(--space-1-5);
+  }
+
+  .ci-muted {
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-regular);
+    color: var(--text-secondary);
+  }
+
+  .ci-internal {
+    margin-left: var(--space-1);
+    font-weight: var(--fw-medium);
+  }
+
+  .ci-todo,
+  .ci-error-summary {
+    margin-block: var(--space-1-5);
+    padding: var(--space-1-5) var(--space-2);
+    border-radius: var(--radius-md);
+  }
+
+  .ci-todo {
+    background: var(--color-warning-bg);
+    border: 1px solid var(--color-warning-border);
+    color: var(--color-warning);
+  }
+
+  .ci-error-summary {
+    border: 2px solid var(--color-error);
+  }
+
+  .ci-error-summary a {
+    color: var(--color-error);
+  }
+
+  .ci-todo ul,
+  .ci-error-summary ul {
+    margin-top: 4px;
+    padding-left: var(--space-3);
+    list-style: disc;
+  }
+
+  .ci-ready {
+    margin-block: var(--space-1);
+    color: var(--color-success);
+    font-weight: var(--fw-semibold);
+  }
+
+  .ci-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1-5);
+    margin-block: var(--space-1-5);
+  }
+
+  .ci-form {
+    display: grid;
+    gap: var(--space-2);
+    justify-items: start;
+    max-width: 720px;
+    margin-top: var(--space-2);
+  }
+
+  .ci-form .admin-field {
+    width: 100%;
+  }
+
+  .ci-photo {
+    width: 160px;
+    height: auto;
+    border-radius: var(--radius-md);
+    background: var(--ice-50);
+  }
+
+  .ci-danger form {
+    margin-top: var(--space-1-5);
+  }
+</style>

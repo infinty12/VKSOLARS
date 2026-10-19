@@ -1,0 +1,171 @@
+---
+// Site content (Stage 7B): statistics, testimonials, team and achievements. Each item has a
+// private draft and a published snapshot; only published items appear on the website.
+// Reordering takes effect immediately (order is not private).
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Csrf from '../../../components/admin/Csrf.astro';
+import { KINDS, KIND_LABELS, listItems, moveItem, itemSummary, type ItemStatus } from '../../../lib/server/content-items.ts';
+import { flashFrom } from '../../../lib/server/http.ts';
+
+const userId = Astro.locals.admin!.user.id;
+let actionError: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('_action') ?? '');
+  const direction = String(form.get('direction') ?? '');
+  if (action === 'move' && (direction === 'up' || direction === 'down')) {
+    const id = Number(form.get('id'));
+    moveItem(id, direction, userId);
+    return Astro.redirect(`/admin/content?msg=itemMoved#item-${id}`, 303);
+  }
+  actionError = 'Unknown action.';
+  Astro.response.status = 422;
+}
+
+const lists = KINDS.map((kind) => ({ kind, items: listItems(kind) }));
+const STATUS: Record<ItemStatus, { label: string; badge: string }> = {
+  draft: { label: 'Draft — not public', badge: 'admin-badge--off' },
+  published: { label: 'Published', badge: 'admin-badge--on' },
+  changed: { label: 'Published — unpublished changes', badge: 'admin-badge--new' },
+};
+const flash = actionError ? { kind: 'error' as const, text: actionError } : flashFrom(Astro.url);
+---
+
+<AdminLayout title="Site content" crumbs={[{ label: 'Site content' }]} flash={flash}>
+  <section class="admin-card ct-intro" aria-labelledby="ct-intro-title">
+    <h2 id="ct-intro-title">Verified content only</h2>
+    <p>
+      Add only real, confirmed information. Each item is saved as a private draft and appears on the website only after you publish it. Statistics need
+      a source, testimonials need the client’s approval, team members need their consent, and achievements need evidence — these notes are never
+      shown publicly.
+    </p>
+    <p><a href="/admin/content/preview" class="admin-btn admin-btn--secondary">Preview all drafts</a></p>
+  </section>
+
+  {
+    lists.map(({ kind, items }) => (
+      <section class="admin-card ct-list" aria-labelledby={`ct-${kind}-title`}>
+        <div class="ct-list__head">
+          <div>
+            <h2 id={`ct-${kind}-title`}>{KIND_LABELS[kind].many}</h2>
+            <p class="admin-hint">Shown on: {KIND_LABELS[kind].where}. Visitors see published items, in this order.</p>
+          </div>
+          <a href={`/admin/content/${kind}/new`} class="admin-btn admin-btn--primary">
+            Add {KIND_LABELS[kind].one.toLowerCase()}
+          </a>
+        </div>
+        {items.length === 0 ? (
+          <p class="admin-empty">
+            {kind === 'team' ? 'None yet — the About page shows a “Team profiles coming soon” note.' : 'None yet — this section is hidden on the website.'}
+          </p>
+        ) : (
+          <ol class="ct-items" role="list">
+            {items.map((item, i) => {
+              const summary = itemSummary(kind, item.draft);
+              return (
+                <li class="ct-item" id={`item-${item.id}`}>
+                  <div class="ct-item__main">
+                    <a href={`/admin/content/${kind}/${item.id}`} class="ct-item__link">
+                      {summary}
+                    </a>
+                    <p class="ct-item__meta">
+                      <span class:list={['admin-badge', STATUS[item.status].badge]}>{STATUS[item.status].label}</span>
+                      {item.status !== 'published' && item.problems.length > 0 && (
+                        <span class="ct-item__todo">
+                          {item.problems.length} {item.problems.length === 1 ? 'step' : 'steps'} before it can be published
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <div class="ct-item__order">
+                    <form method="post" class="admin-inline-form">
+                      <Csrf />
+                      <input type="hidden" name="_action" value="move" />
+                      <input type="hidden" name="id" value={item.id} />
+                      <input type="hidden" name="direction" value="up" />
+                      <button type="submit" class="admin-btn admin-btn--secondary" disabled={i === 0}>
+                        Up<span class="sr-only">: move “{summary}” up</span>
+                      </button>
+                    </form>
+                    <form method="post" class="admin-inline-form">
+                      <Csrf />
+                      <input type="hidden" name="_action" value="move" />
+                      <input type="hidden" name="id" value={item.id} />
+                      <input type="hidden" name="direction" value="down" />
+                      <button type="submit" class="admin-btn admin-btn--secondary" disabled={i === items.length - 1}>
+                        Down<span class="sr-only">: move “{summary}” down</span>
+                      </button>
+                    </form>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </section>
+    ))
+  }
+</AdminLayout>
+
+<style>
+  .ct-intro p {
+    max-width: 72ch;
+    margin-top: var(--space-1);
+    color: var(--text-secondary);
+  }
+
+  .ct-list__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-1-5);
+    margin-bottom: var(--space-2);
+  }
+
+  .ct-items {
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .ct-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-1-5);
+    padding: var(--space-1-5);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+  }
+
+  .ct-item__main {
+    display: grid;
+    gap: 4px;
+    flex: 1 1 260px;
+    min-width: 0;
+  }
+
+  .ct-item__link {
+    font-weight: var(--fw-semibold);
+    overflow-wrap: anywhere;
+  }
+
+  .ct-item__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .ct-item__todo {
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+  }
+
+  .ct-item__order {
+    display: flex;
+    gap: var(--space-1);
+  }
+</style>

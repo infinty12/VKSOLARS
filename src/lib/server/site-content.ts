@@ -53,10 +53,10 @@ const SOCIAL_HOSTS: Record<'linkedin' | 'instagram' | 'facebook' | 'youtube', st
 const INVISIBLE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g;
 
 /** One line of plain text: invisible characters removed, whitespace collapsed. */
-const oneLine = (v: unknown) => String(v ?? '').replace(INVISIBLE, '').replace(/\s+/g, ' ').trim();
+export const oneLine = (v: unknown) => String(v ?? '').replace(INVISIBLE, '').replace(/\s+/g, ' ').trim();
 
 /** Multi-line plain text: each line cleaned, blank lines dropped, \n kept as the only separator. */
-const multiLine = (v: unknown) =>
+export const multiLine = (v: unknown) =>
   String(v ?? '')
     .replace(/\r\n?/g, '\n')
     .split('\n')

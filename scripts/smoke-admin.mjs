@@ -103,7 +103,7 @@ try {
   }
 
   // ---- Unauthenticated access
-  for (const p of ['/admin', '/admin/', '/admin/service-areas', '/admin/service-areas/new', '/admin/service-areas/1', '/admin/backups', '/admin/media', '/admin/media/1', '/admin/site-content', '/admin/site-content/preview']) {
+  for (const p of ['/admin', '/admin/', '/admin/service-areas', '/admin/service-areas/new', '/admin/service-areas/1', '/admin/backups', '/admin/media', '/admin/media/1', '/admin/site-content', '/admin/site-content/preview', '/admin/content', '/admin/content/preview', '/admin/content/stat/new', '/admin/content/team/1']) {
     const r = await get(p);
     check(`GET ${p} unauthenticated → 303 to /admin/login`, r.status === 303 && r.headers.get('location')?.startsWith('/admin/login'), `${r.status} ${r.headers.get('location')}`);
   }

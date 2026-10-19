@@ -1,10 +1,10 @@
 ---
-// Client-approved testimonials only. Renders nothing until site.testimonials is filled.
+// Client-approved, published testimonials only (Admin → Site content). Renders nothing while there are none.
 // Shown as a static grid (no auto-rotation) so every quote stays readable and in reach.
 import SectionHeading from './SectionHeading.astro';
-import { site } from '../config/site';
+import { contentFor } from '../lib/server/content-items.ts';
 
-const items = site.testimonials.filter((t) => t.approved);
+const items = contentFor(Astro.locals).testimonials;
 ---
 
 {
@@ -56,6 +56,8 @@ const items = site.testimonials.filter((t) => t.approved);
   .testimonial blockquote {
     font-size: var(--fs-md);
     color: var(--text-primary);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
   }
 
   .testimonial figcaption {

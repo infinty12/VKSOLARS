@@ -1,9 +1,10 @@
 ---
 // Verified company statistics with a count-up on first view.
-// Renders nothing unless site.stats contains verified figures.
+// Renders nothing unless verified figures are published (Admin → Site content).
 import { site } from '../config/site';
+import { contentFor } from '../lib/server/content-items.ts';
 
-const stats = site.stats;
+const stats = contentFor(Astro.locals).stats;
 const fmt = new Intl.NumberFormat('en-IN');
 ---
 

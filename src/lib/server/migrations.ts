@@ -290,6 +290,29 @@ export const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    id: 8,
+    name: 'verified content items: statistics, testimonials, team, achievements',
+    // Each item has a private working copy (draft_data) and the snapshot visitors see
+    // (published_data, NULL = not published). Both are validated plain-text JSON. Internal notes
+    // (sources, approvals, evidence) live in the same JSON but are never rendered publicly.
+    sql: `
+      CREATE TABLE content_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind TEXT NOT NULL CHECK (kind IN ('stat', 'testimonial', 'team', 'achievement')),
+        position INTEGER NOT NULL,
+        draft_data TEXT NOT NULL CHECK (json_valid(draft_data)),
+        published_data TEXT CHECK (published_data IS NULL OR json_valid(published_data)),
+        published_at TEXT,
+        published_by INTEGER REFERENCES admin_users(id) ON DELETE SET NULL,
+        created_by INTEGER REFERENCES admin_users(id) ON DELETE SET NULL,
+        updated_by INTEGER REFERENCES admin_users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_content_items_kind ON content_items(kind, position);
+    `,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].id;

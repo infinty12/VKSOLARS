@@ -1,0 +1,66 @@
+---
+// Admin-only preview of every content item's DRAFT, rendered with the public components. Under
+// /admin: sign-in and this-computer-only are enforced by the middleware, which also sends
+// no-store + noindex; the page sets <meta robots noindex> too. Only this response uses drafts.
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import StatsBand from '../../../components/StatsBand.astro';
+import Testimonials from '../../../components/Testimonials.astro';
+import TeamSection from '../../../components/TeamSection.astro';
+import { draftPreviewContent } from '../../../lib/server/content-items.ts';
+
+Astro.locals.contentPreview = draftPreviewContent();
+---
+
+<SiteLayout title="Content preview" description="Draft preview of statistics, testimonials, team and achievements. Not published." noindex>
+  <div class="preview-banner" role="note" aria-label="Draft preview">
+    <div class="container preview-banner__inner">
+      <p>
+        <strong>Draft preview.</strong> Shows every item’s latest draft, including unpublished ones. Only visible to signed-in administrators —
+        visitors see published items only.
+      </p>
+      <a href="/admin/content" class="preview-banner__link">Back to site content</a>
+    </div>
+  </div>
+
+  <section class="section section--sm" aria-labelledby="cp-title">
+    <div class="container">
+      <h1 id="cp-title" class="cp-title">Content preview</h1>
+      <p class="cp-text">Sections with no items stay hidden on the website, exactly as here.</p>
+    </div>
+  </section>
+
+  <StatsBand />
+  <Testimonials />
+  <TeamSection />
+</SiteLayout>
+
+<style>
+  .preview-banner {
+    background: var(--color-warning-bg);
+    border-bottom: 2px solid var(--color-warning-border);
+    color: var(--color-warning);
+  }
+
+  .preview-banner__inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-1) var(--space-3);
+    padding-block: var(--space-1-5);
+  }
+
+  .preview-banner__link {
+    color: inherit;
+    font-weight: var(--fw-semibold);
+  }
+
+  .cp-title {
+    font-size: var(--fs-h2);
+  }
+
+  .cp-text {
+    margin-top: var(--space-1);
+    color: var(--text-secondary);
+  }
+</style>
