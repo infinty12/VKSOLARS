@@ -1,5 +1,6 @@
 import { getDb, nowIso } from './db.ts';
 import { config } from './config.ts';
+import { enquiryStore } from './online-enquiries.ts';
 
 /** Known settings with their defaults. Unknown keys are rejected. */
 const DEFAULTS = {
@@ -42,6 +43,9 @@ export function setSetting<K extends SettingKey>(key: K, value: SettingValue<K>)
  */
 export function enquiryGates() {
   const env = config.enquiriesEnabled;
+  // Hosted site (ENQUIRY_STORE=firebase): enquiries go to Firestore and the local admin switch
+  // (kept in a temporary SQLite file there) does not apply; the server switch alone decides.
+  if (enquiryStore() === 'firebase') return { env, admin: true, open: env };
   const admin = getSetting('enquiries.accept');
   return { env, admin, open: env && admin };
 }

@@ -38,7 +38,7 @@ export function portalStatus(): { open: boolean; reason: 'ok' | 'switched_off' |
 
 export const REQUEST_TYPES = [{ value: 'free-inspection', label: 'Free solar inspection' }, ...services.map((s) => ({ value: s.slug, label: s.title }))];
 const REQUEST_TYPE_VALUES = new Set(REQUEST_TYPES.map((t) => t.value));
-export const requestTypeLabel = (v: string) => REQUEST_TYPES.find((t) => t.value === v)?.label ?? v;
+export const requestTypeLabel = (v: string) => (v === 'not-sure' ? 'Not sure — please recommend' : (REQUEST_TYPES.find((t) => t.value === v)?.label ?? v));
 
 export const REQUEST_STATUSES = ['submitted', 'reviewing', 'scheduled', 'in_progress', 'completed', 'cancelled'] as const;
 export type RequestStatus = (typeof REQUEST_STATUSES)[number];
@@ -249,6 +249,12 @@ export interface ServiceRequest {
   history: StatusChange[];
   createdAt: string;
   updatedAt: string;
+  /** "portal" (signed-in customer) or "contact-form" (public enquiry, no account). */
+  source: 'portal' | 'contact-form';
+  /** Contact details for contact-form enquiries (portal requests use the customer profile). */
+  contact: { name: string; phone: string; email: string } | null;
+  /** Email notification outcome for contact-form enquiries. */
+  notification: { status: string; error: string } | null;
 }
 
 const toRequest = (id: string, d: FirebaseFirestore.DocumentData): ServiceRequest => ({
@@ -264,6 +270,9 @@ const toRequest = (id: string, d: FirebaseFirestore.DocumentData): ServiceReques
   history: Array.isArray(d.history) ? (d.history as StatusChange[]).filter((h) => isRequestStatus(h?.status)).slice(-20) : [],
   createdAt: String(d.createdAt ?? ''),
   updatedAt: String(d.updatedAt ?? ''),
+  source: d.source === 'contact-form' ? 'contact-form' : 'portal',
+  contact: d.contact && typeof d.contact === 'object' ? { name: String(d.contact.name ?? ''), phone: String(d.contact.phone ?? ''), email: String(d.contact.email ?? '') } : null,
+  notification: d.notification && typeof d.notification === 'object' ? { status: String(d.notification.status ?? ''), error: String(d.notification.error ?? '') } : null,
 });
 
 const newReference = () => {
@@ -338,7 +347,7 @@ export async function adminGetRequest(id: string) {
   const snap = await (await requests()).doc(id).get();
   if (!snap.exists) return null;
   const request = toRequest(snap.id, snap.data()!);
-  const customer = await getProfile(request.uid);
+  const customer = request.uid ? await getProfile(request.uid) : null; // contact-form enquiries have no account
   const notesSnap = await snap.ref.collection('notes').orderBy('createdAt', 'asc').limit(100).get();
   const notes = notesSnap.docs.map((n) => ({ body: String(n.get('body') ?? ''), author: String(n.get('author') ?? ''), createdAt: String(n.get('createdAt') ?? '') }));
   return { request, customer, notes };

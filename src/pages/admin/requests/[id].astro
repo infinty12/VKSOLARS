@@ -63,7 +63,26 @@ const flash = actionError ? { kind: 'error' as const, text: actionError } : flas
       <section class="admin-card" aria-labelledby="rq-customer">
         <h2 id="rq-customer">Customer</h2>
         {
-          customer ? (
+          r.contact ? (
+            <dl class="rq-dl">
+              <div><dt>Source</dt><dd>Contact form (no account)</dd></div>
+              <div><dt>Name</dt><dd>{r.contact.name}</dd></div>
+              <div><dt>Phone</dt><dd><a href={`tel:${r.contact.phone.replace(/[^\d+]/g, '')}`}>{r.contact.phone}</a></dd></div>
+              <div><dt>Email</dt><dd>{r.contact.email ? <a href={`mailto:${r.contact.email}`}>{r.contact.email}</a> : 'Not given'}</dd></div>
+              <div>
+                <dt>Email notification</dt>
+                <dd data-notification={r.notification?.status ?? ''}>
+                  {r.notification?.status === 'sent'
+                    ? 'Sent to the business inbox'
+                    : r.notification?.status === 'failed'
+                      ? `Failed (${r.notification.error}) — please follow up from this page`
+                      : r.notification?.status === 'disabled'
+                        ? 'Email notifications are not configured'
+                        : 'Not recorded'}
+                </dd>
+              </div>
+            </dl>
+          ) : customer ? (
             <dl class="rq-dl">
               <div><dt>Name</dt><dd>{customer.name}</dd></div>
               <div><dt>Email</dt><dd><a href={`mailto:${customer.email}`}>{customer.email}</a></dd></div>

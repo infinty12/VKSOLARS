@@ -21,6 +21,7 @@ import { listRegions } from '../../lib/server/areas.ts';
 import { hit } from '../../lib/server/ratelimit.ts';
 import { ENQUIRY_LIMIT } from '../../lib/server/config.ts';
 import { services } from '../../data/services.ts';
+import { enquiryStore, sharedRateLimit, submitOnlineEnquiry } from '../../lib/server/online-enquiries.ts';
 
 export const prerender = false;
 
@@ -110,7 +111,17 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
       return 'unknown';
     }
   })();
-  const wait = hit(`ip:${ip}`, ENQUIRY_LIMIT.perIpMax, ENQUIRY_LIMIT.perIpWindowMs) ?? hit('global', ENQUIRY_LIMIT.globalMax, ENQUIRY_LIMIT.globalWindowMs);
+  const store = enquiryStore();
+  let wait = hit(`ip:${ip}`, ENQUIRY_LIMIT.perIpMax, ENQUIRY_LIMIT.perIpWindowMs) ?? hit('global', ENQUIRY_LIMIT.globalMax, ENQUIRY_LIMIT.globalWindowMs);
+  if (!wait && store === 'firebase') {
+    // Hosted site: also count in Firestore, shared by every server instance.
+    try {
+      wait = await sharedRateLimit(ip);
+    } catch (err) {
+      console.error('[enquiries] rate-limit check failed:', (err as Error).name);
+      return reply(503, 'server');
+    }
+  }
   if (wait) return reply(429, 'rate_limited', { retryAfter: wait });
 
   // 7. Validate with the shared rules.
@@ -124,7 +135,11 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
   const errors = validateEnquiry(values, { serviceSlugs: SERVICE_SLUGS, regionCodes });
   if (Object.keys(errors).length) return reply(422, 'invalid', { errors });
 
-  // Store.
+  // Store. Hosted site: Firestore, then the email notification (see online-enquiries.ts).
+  if (store === 'firebase') {
+    const result = await submitOnlineEnquiry(values);
+    return result.ok ? reply(201, 'sent', { reference: result.reference }) : reply(500, 'server');
+  }
   try {
     const { reference } = createEnquiry(values);
     return reply(201, 'sent', { reference });

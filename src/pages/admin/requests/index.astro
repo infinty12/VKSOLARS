@@ -79,7 +79,10 @@ const href = (changes: Record<string, string | null>) => {
                     {r.reference}
                   </a>
                 </th>
-                <td data-label="Service">{requestTypeLabel(r.type)}</td>
+                <td data-label="Service">
+                  {requestTypeLabel(r.type)}
+                  {r.source === 'contact-form' && <span class="admin-hint"> · Contact form</span>}
+                </td>
                 <td data-label="Location">{[r.location, regionName(r.region)].filter(Boolean).join(', ')}</td>
                 <td data-label="Submitted">{fmt(r.createdAt)}</td>
                 <td data-label="Status">
